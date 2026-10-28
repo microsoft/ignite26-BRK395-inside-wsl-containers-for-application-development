@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="MoonrayArrasViewer.app" type="win32" />
+
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 and 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+    </application>
+  </compatibility>
+
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">permonitorv2,permonitor</dpiAwareness>
+    </windowsSettings>
+  </application>
+
+  <!-- Registration-free WinRT: the WSL Containers net targets do NOT inject
+       the activation manifest (only the native/C++ targets do), so we embed the
+       activatable-class entries here so RoGetActivationFactory resolves the runtime
+       classes out of wslcsdk.dll without COM registration. -->
+  <file name="wslcsdk.dll">
+    <activatableClass name="Microsoft.WSL.Containers.Container"            threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.ContainerNamedVolume" threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.ContainerPortMapping" threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.ContainerSettings"    threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.ContainerVolume"      threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.ImageInfo"            threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.ImageProgress"        threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.InstallProgress"      threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.Process"              threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.ProcessSettings"      threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.PullImageOptions"     threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.PushImageOptions"     threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.ServiceVersion"       threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.Session"              threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.SessionSettings"      threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.TagImageOptions"      threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.VhdOptions"           threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="Microsoft.WSL.Containers.WslcService"          threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+  </file>
+</assembly>

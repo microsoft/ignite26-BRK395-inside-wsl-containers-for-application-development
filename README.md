@@ -55,7 +55,9 @@ Post-event self-run steps have not yet been confirmed. The choice between
 [`instructions/`](instructions/README.md) and a docs-site entry point is also
 awaiting confirmation; neither currently provides session-specific guidance.
 
-The optional `src/`, `data/`, `infra/`, and `docs/` folders remain placeholders.
+Demo source code is available in [`src/`](src/README.md): the Aspire HotTakes
+application and the Moonray Windows viewer.
+The optional `data/`, `infra/`, and `docs/` folders remain placeholders.
 Their use for this session has not yet been confirmed.
 
 ### 🎯 Learning outcomes

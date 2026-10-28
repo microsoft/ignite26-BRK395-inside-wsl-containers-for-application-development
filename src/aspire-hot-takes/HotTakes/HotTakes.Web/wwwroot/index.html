@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hot Takes 🔥</title>
+  <style>
+    :root { --bg: #14111f; --card: #221d33; --accent: #ff6b35; --text: #f4f1ff; --muted: #a59fc0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: radial-gradient(circle at top, #2b2045, var(--bg) 60%); color: var(--text); min-height: 100vh; }
+    main { max-width: 820px; margin: 0 auto; padding: 48px 24px; }
+    h1 { font-size: 3.2rem; margin: 0; }
+    .subtitle { color: var(--muted); font-size: 1.2rem; margin: 6px 0 28px; }
+    .badge { display: inline-flex; gap: 10px; align-items: center; padding: 10px 18px; border-radius: 999px; font-size: 1.15rem; font-weight: 600; margin-bottom: 24px; transition: background .3s; }
+    .badge.cache { background: #1f6f4a; }
+    .badge.database { background: #2f5b9a; }
+    .badge.error { background: #8a2b2b; }
+    .toolbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    #refresh { background: transparent; border: 1px solid var(--muted); }
+    ol { list-style: none; padding: 0; margin: 0; }
+    li { display: flex; align-items: center; gap: 18px; background: var(--card); border-radius: 14px; padding: 16px 20px; margin-bottom: 12px; font-size: 1.3rem; }
+    .rank { font-weight: 700; color: var(--accent); width: 2ch; }
+    .text { flex: 1; }
+    .votes { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 4ch; text-align: right; }
+    button { background: var(--accent); color: white; border: 0; border-radius: 10px; padding: 10px 16px; font-size: 1.1rem; cursor: pointer; }
+    button:hover { filter: brightness(1.15); }
+    footer { margin-top: 28px; color: var(--muted); font-size: .95rem; }
+    .bot { background: var(--card); border: 1px solid #3a3157; border-radius: 14px; padding: 14px 18px; margin-bottom: 22px; }
+    .bot-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .chip { flex: 1; min-width: 260px; font-weight: 600; font-size: 1.05rem; }
+    .chip.ready { color: #6ee7a8; } .chip.cpu { color: #ffc861; } .chip.error { color: #ff8080; } .chip.loading { color: var(--muted); }
+    .bot button { font-size: 1rem; padding: 8px 14px; }
+    .bot button:disabled { opacity: .45; cursor: default; filter: none; }
+    #autopilot { background: transparent; border: 1px solid var(--accent); }
+    #autopilot.on { background: #6b3bd1; border-color: #6b3bd1; }
+    .bot-last { color: var(--muted); font-size: .95rem; margin-top: 8px; min-height: 1.2em; }
+    .tag { display: block; font-size: .85rem; color: #b9a6ff; margin-top: 4px; }
+    li.fresh { animation: glow 2.5s ease-out; }
+    @keyframes glow { from { box-shadow: 0 0 0 3px #b9a6ff; background: #3a2f63; } to { box-shadow: 0 0 0 0 transparent; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Hot Takes 🔥</h1>
+    <p class="subtitle">Vote for the developer opinion you'll defend to the end.</p>
+    <section class="bot">
+      <div class="bot-row">
+        <span id="bot-chip" class="chip loading">🧠 Hot Take Bot: connecting…</span>
+        <button id="generate" disabled>🤖 Write a take</button>
+        <button id="autopilot" disabled>▶ Autopilot</button>
+      </div>
+      <div id="bot-last" class="bot-last"></div>
+    </section>
+    <div class="toolbar"><div id="badge" class="badge">Loading…</div><button id="refresh">↻ Refresh</button></div>
+    <ol id="takes"></ol>
+    <footer>browser → web → api → Redis 🟥 / Postgres 🐘 / npu-agent 🧠 &nbsp;·&nbsp; containers running on WSLc, AI running on the NPU</footer>
+  </main>
+  <script>
+    const badge = document.getElementById("badge");
+    const list = document.getElementById("takes");
+    const chip = document.getElementById("bot-chip");
+    const genBtn = document.getElementById("generate");
+    const autoBtn = document.getElementById("autopilot");
+    const lastEl = document.getElementById("bot-last");
+    let freshId = null, postedTotal = null, generating = false, bot = null;
+
+    async function load() {
+      try {
+        const res = await fetch("/leaderboard");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        badge.className = `badge ${data.source}`;
+        badge.textContent = data.source === "cache"
+          ? `⚡ Served from Redis cache in ${data.elapsedMs} ms`
+          : `🐘 Served from Postgres in ${data.elapsedMs} ms (cache miss)`;
+        list.innerHTML = "";
+        data.takes.forEach((take, i) => {
+          const li = document.createElement("li");
+          li.innerHTML = `<span class="rank">${i + 1}</span><span class="text"></span><span class="votes">${take.votes}</span><button>🔥 Vote</button>`;
+          li.querySelector(".text").textContent = take.text;
+          if (take.author === "npu-bot") {
+            const tag = document.createElement("span");
+            tag.className = "tag";
+            const where = take.device === "NPU" ? "on the NPU" : `on ${take.device} (no NPU)`;
+            tag.textContent = `🤖 written by AI ${where}${take.genMs ? ` in ${(take.genMs / 1000).toFixed(1)} s` : ""}`;
+            li.querySelector(".text").appendChild(tag);
+          }
+          if (take.id === freshId) li.classList.add("fresh");
+          li.querySelector("button").onclick = () => vote(take.id);
+          list.appendChild(li);
+        });
+        freshId = null;
+      } catch (err) {
+        badge.className = "badge error";
+        badge.textContent = `⚠️ Couldn't load the leaderboard (${err.message})`;
+      }
+    }
+
+    async function vote(id) {
+      await fetch(`/vote/${id}`, { method: "POST" });
+      await load();
+    }
+
+    function renderBot() {
+      const a = (bot && bot.agent) || { state: "starting" };
+      const model = a.modelName || "the model";
+      const ready = a.state === "ready";
+      if (ready && a.device === "NPU") {
+        chip.className = "chip ready";
+        chip.textContent = `🧠 ${model} ready on the NPU · ${a.deviceName}`;
+      } else if (ready) {
+        chip.className = "chip cpu";
+        chip.textContent = `⚠️ No NPU visible: ${model} is running on ${a.device} (slower)`;
+      } else if (a.state === "error") {
+        chip.className = "chip error";
+        chip.textContent = `⚠️ NPU agent error: ${a.detail}`;
+      } else {
+        chip.className = "chip loading";
+        chip.textContent = `🧠 Hot Take Bot warming up… ${a.detail || a.state}`;
+      }
+      const busy = generating || (bot && bot.busy);
+      genBtn.disabled = !ready || busy;
+      genBtn.textContent = busy ? `✍️ Thinking on the ${a.device || "NPU"}…` : "🤖 Write a take";
+      autoBtn.disabled = !bot;
+      const on = bot && bot.autopilot;
+      autoBtn.className = on ? "on" : "";
+      autoBtn.textContent = on
+        ? `⏸ Autopilot ${bot.postedThisRun}/${bot.maxPerRun}${bot.nextRunInSeconds != null && !busy ? ` · next in ${bot.nextRunInSeconds} s` : ""}`
+        : "▶ Autopilot";
+      if (bot && bot.lastError) {
+        lastEl.textContent = `⚠️ ${bot.lastError}`;
+      } else if (bot && bot.last) {
+        const l = bot.last;
+        lastEl.textContent = `Last take: ${l.model} on ${l.device} (${l.deviceName}) · first word in ${(l.ttftMs / 1000).toFixed(1)} s · done in ${(l.totalMs / 1000).toFixed(1)} s · ${l.tokens ?? "?"} tokens`;
+      }
+    }
+
+    async function pollBot() {
+      try {
+        const res = await fetch("/bot");
+        if (res.ok) {
+          bot = await res.json();
+          if (postedTotal !== null && bot.postedTotal > postedTotal) {
+            freshId = bot.last && bot.last.id;
+            await load();
+          }
+          postedTotal = bot.postedTotal;
+        }
+      } catch { /* api still starting */ }
+      renderBot();
+    }
+
+    genBtn.onclick = async () => {
+      generating = true; renderBot();
+      try {
+        const res = await fetch("/bot/generate", { method: "POST" });
+        if (!res.ok) {
+          const problem = await res.json().catch(() => ({}));
+          lastEl.textContent = `⚠️ ${problem.detail || `HTTP ${res.status}`}`;
+        }
+      } finally {
+        generating = false;
+        await pollBot();
+      }
+    };
+
+    autoBtn.onclick = async () => {
+      await fetch(`/bot/autopilot?on=${!(bot && bot.autopilot)}`, { method: "POST" });
+      await pollBot();
+    };
+
+    document.getElementById("refresh").onclick = load;
+    load();
+    pollBot();
+    setInterval(pollBot, 2000);
+  </script>
+</body>
+</html>
