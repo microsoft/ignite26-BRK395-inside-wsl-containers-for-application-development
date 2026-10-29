@@ -1,39 +1,70 @@
 # aks-desktop
 
-Embedding Arena on microk8s.
-
-This is a live, visual benchmark of 14 open-source embedding models running on **CPU**. Everything runs in microk8s inside WSL Debian:
-
-- the vector database
-- a dataset seeder
-- one container per model
-
-A web dashboard shows what Kubernetes is doing as the run progresses.
+Embedding Arena: a live, visual benchmark of 14 open-source embedding models running on **CPU** in a local single-node Kubernetes cluster created by `aks-desktop.exe`. The vector database, a dataset seeder and one Job per model run in the cluster, and a web dashboard shows what Kubernetes is doing as the run progresses.
 
 ![flow](https://img.shields.io/badge/flow-START%20→%20DB%20→%20seed%20→%20benchmarks%20→%20leaderboard-7c5cff)
 
-## Quick start
+## Prepare (before the session)
 
-From Windows PowerShell:
+Requirements: Windows with WSL, `kubectl` (`winget install Kubernetes.kubectl`), and the Microsoft-signed `aks-desktop.exe` binary in `~/Downloads`.
+
+From Windows PowerShell in this folder:
 
 ```powershell
-.\scripts\setup-wsl.ps1
+.\scripts\setup.ps1
 ```
 
-The script is idempotent. It:
+The script checks aks-desktop, kubectl and WSL networking, and caches the aks-desktop prerequisites. It then deploys the project once on a temporary cluster and deletes it, which caches the Python dependencies in the WSL distro so the live deploy is quick. Add `-SkipWarmup` to skip that last step. It doesn't leave a cluster running.
 
-- runs `wsl --install -d Debian`
-- makes root and sudo passwordless
-- enables systemd
-- installs microk8s (with `dns` and `hostpath-storage`) and podman
-- builds and deploys the arena
-- opens **http://localhost:8080**
+## Run the demo
 
-If the distro is already provisioned, redeploy after code changes from inside Debian:
+Run these from Windows PowerShell in this folder.
 
-```bash
-bash /mnt/c/cDev/ignite26-brk395/src/aks-desktop/scripts/deploy.sh
+### 1. Create the cluster
+
+```powershell
+$aks = "$HOME\Downloads\aks-desktop.exe"
+& $aks cluster create --name embedding-arena --kubernetes-version v1.36.1 --provider wsl
 ```
+
+This takes about two minutes. aks-desktop provisions the `Ubuntu-24.04` WSL distro, brings up a single-node Kubernetes cluster and merges its credentials into `~\.kube\config`.
+
+### 2. Apply the project to the cluster
+
+```powershell
+kubectl apply -k .
+kubectl -n arena rollout status deploy/arena-dashboard
+kubectl -n arena port-forward svc/arena-dashboard 8080:80
+```
+
+Open **http://localhost:8080** and press **START**. The port-forward runs in the foreground, so use a second terminal for step 3.
+
+There is no image to build. `kubectl apply -k .` uses [`kustomization.yaml`](kustomization.yaml) to package the `app/` code as ConfigMaps, and every pod runs the stock `python:3.12-slim` image. On first start, the dashboard's `deps` init container installs `app/requirements.txt` into the node's cache.
+
+### 3. Show that it's working
+
+```powershell
+& $aks cluster show --name embedding-arena    # aks-desktop's view: WSL distro, node IP, agent
+kubectl cluster-info
+kubectl get nodes -o wide                     # one Ready node, running in WSL
+kubectl get pods -A                           # system pods plus the arena namespace
+kubectl -n arena get all,configmaps
+kubectl -n arena get pods -w                  # after START: postgres, the seed Job and the bench-* Jobs come and go
+kubectl -n arena logs deploy/arena-dashboard -c deps
+kubectl -n arena logs -l arena/role=worker --tail=5 --prefix
+kubectl -n arena get events --sort-by=.lastTimestamp
+```
+
+### 4. Delete the cluster
+
+aks-desktop has no stop command yet, so deleting is how you shut the cluster down.
+
+```powershell
+.\scripts\delete.ps1          # stop the port-forward and delete the cluster, keep the WSL distro and its caches
+.\scripts\delete.ps1 -Purge   # also destroy the Ubuntu-24.04 distro
+```
+
+The script wraps `& $aks cluster delete --name embedding-arena --prune-kubeconfig`. After you change the app, rerun `kubectl apply -k .`, then run `kubectl -n arena rollout restart deploy/arena-dashboard`.
 
 ## Using the dashboard
 
@@ -72,7 +103,7 @@ The models are BGE Small, Base and Large v1.5; all-MiniLM-L6-v2; Multilingual Mi
 ## Architecture
 
 ```
- Browser ──WebSocket──► arena-dashboard (FastAPI, Deployment + NodePort 30080)
+ Browser ──WebSocket──► arena-dashboard (FastAPI Deployment, via kubectl port-forward :8080)
                           │  Kubernetes API (ServiceAccount + Role in ns/arena)
                           ├─► Deployment/Service  arena-postgres  (pgvector/pgvector:pg17)
                           ├─► Job  seed-<run>     (downloads SciFact → docs/queries/qrels)
@@ -83,35 +114,31 @@ The models are BGE Small, Base and Large v1.5; all-MiniLM-L6-v2; Multilingual Mi
 ```
 
 - The orchestrator loop (`app/dashboard.py`) keeps `max_parallel` benchmark Jobs running, tracks pods and events, and pushes a full snapshot to every browser about twice a second.
-- A single image, `arena:dev`, holds the dashboard, the seeder and the worker. It is built with podman and imported into microk8s' containerd (`scripts/build.sh`).
-- Model weights and the dataset are cached on the node at `/var/lib/arena-cache` (hostPath), so later runs start instantly.
+- There is no custom image. Every pod runs `python:3.12-slim`, mounts the code from the `arena-app` ConfigMap, and imports its dependencies from `/var/lib/arena-cache/pylib` on the node. The dashboard's init container installs them there once, keyed by a hash of `requirements.txt`.
+- Model weights, the dataset and the Python dependencies are all cached on the node at `/var/lib/arena-cache` (hostPath). That cache lives in the WSL distro and survives `cluster delete`, so later runs start quickly.
 
 ## Layout
 
 ```
-app/                 dashboard.py · worker.py · seed.py · catalog.py · common.py · static/ (UI)
-k8s/arena.yaml       namespace, RBAC, dashboard Deployment + Service
-scripts/setup-wsl.ps1      Windows entry point (install + provision + deploy)
-scripts/setup-debian.sh    root provisioning inside the distro
-scripts/deploy.sh          build image → apply → rollout → port-forward unit
-scripts/build.sh           podman build + import into microk8s
-scripts/wsl-net-fix.*      WSL networking workarounds (systemd service + timer)
-scripts/arena-portforward.service   exposes the dashboard on :8080 for Windows
+app/                     dashboard.py · worker.py · seed.py · catalog.py · common.py · requirements.txt · static/ (UI)
+k8s/arena.yaml           namespace, RBAC, dashboard Deployment (with the deps init container) + Service
+kustomization.yaml       kubectl apply -k . entry point: arena.yaml plus the app code as ConfigMaps
+scripts/setup.ps1        pre-session prep: checks, aks-desktop prereq download, dependency warm-up
+scripts/delete.ps1       stops the port-forward and deletes the cluster (-Purge also removes the distro)
 ```
 
-## Environment notes and workarounds
+## Environment notes
 
-- **WSL "Consomme" networking:** in this mode, every TCP connection to `127.0.0.0/8` inside the distro is routed through Windows. The relay mirrors kubelite's dual-stack `[::]:16443` listener as IPv6-only, so `kubectl` gets *connection refused* on `127.0.0.1:16443`. `wsl-net-fix.sh` adds narrowly scoped `ip rule`s that keep ports 16443 and 25000 on the Linux loopback.
-  - The same script also whitelists Calico interfaces in Docker's `DOCKER-USER` chain. Docker sets the FORWARD policy to DROP, which breaks pod networking.
-- **Dashboard access:** an explicit IPv4 listener (`kubectl port-forward --address 0.0.0.0 … 8080:80`) *is* mirrored to Windows, which is why `http://localhost:8080` works. The NodePort 30080 is also available on the distro's IP.
-- **Corporate networks:** if `files.pythonhosted.org` is blocked, `build.sh` falls back to `https://packagefeedproxy.microsoft.io/pypi/simple/`. You can override this with `PIP_INDEX_URL=...`. Hugging Face (model weights) must be reachable from the pods.
-- **podman builds** use `--network=host` because the default podman network inside WSL has no DNS.
+- Everything runs in WSL. No Docker, podman or image registry is involved: containerd on the node pulls `python:3.12-slim` and `pgvector/pgvector:pg17` from Docker Hub.
+- The cluster needs internet access to pull those images, the Python packages and the Hugging Face model weights. If `files.pythonhosted.org` is blocked (as on some corporate networks), the init container falls back to the internal PyPI feed proxy.
+- The dashboard is exposed to Windows through a loopback-only `kubectl port-forward` on port 8080.
+- aks-desktop needs WSL's default NAT networking. Remove any `networkingMode` line from `%USERPROFILE%\.wslconfig` and run `wsl --shutdown`. Other modes break the cluster: with `mirrored`, the node's own IP is routed out to Windows, so pods can't reach the API server; other modes block Windows from reaching the aks-desktop agent ("connection refused" during `cluster create`). If a cluster was created under another mode, run `.\scripts\delete.ps1 -Purge`, then create it again.
 
 ## Troubleshooting
 
-```bash
-sudo microk8s kubectl -n arena get pods,jobs
-sudo microk8s kubectl -n arena logs deploy/arena-dashboard
-sudo microk8s kubectl -n arena logs job/bench-<model>-<run>
-systemctl status arena-portforward wsl-net-fix.timer
+```powershell
+kubectl -n arena get pods,jobs
+kubectl -n arena logs deploy/arena-dashboard -c deps    # dependency install
+kubectl -n arena logs deploy/arena-dashboard
+kubectl -n arena logs job/bench-<model>-<run>
 ```

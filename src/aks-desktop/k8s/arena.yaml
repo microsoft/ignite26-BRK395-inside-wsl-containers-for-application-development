@@ -63,17 +63,66 @@ spec:
         app: arena-dashboard
     spec:
       serviceAccountName: arena-dashboard
+      # No custom image: the app code comes from the arena-app/arena-static ConfigMaps (see
+      # kustomization.yaml) and Python dependencies are pip-installed once into the node's
+      # /var/lib/arena-cache, which the benchmark pods share and which survives cluster deletes.
+      initContainers:
+        - name: deps
+          image: docker.io/library/python:3.12-slim
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              set -e
+              target=/cache/pylib-$(sha256sum /app/requirements.txt | cut -c1-12)
+              if [ ! -f "$target/.ok" ]; then
+                index=""
+                # Some corporate networks block files.pythonhosted.org; fall back to the internal feed proxy.
+                python -c "import urllib.request as u; u.urlopen('https://files.pythonhosted.org/', timeout=10)" 2>/dev/null \
+                  || index="--index-url https://packagefeedproxy.microsoft.io/pypi/simple/"
+                echo "installing requirements into $target $index"
+                rm -rf "$target.tmp"
+                pip install --no-cache-dir --disable-pip-version-check --root-user-action=ignore -q --target "$target.tmp" $index -r /app/requirements.txt
+                touch "$target.tmp/.ok"
+                rm -rf "$target" && mv "$target.tmp" "$target"
+              fi
+              ln -sfn "$target" /cache/pylib.new && mv -T /cache/pylib.new /cache/pylib
+              echo "dependencies ready: $target"
+          volumeMounts:
+            - name: app
+              mountPath: /app
+            - name: cache
+              mountPath: /cache
       containers:
         - name: dashboard
-          image: docker.io/library/arena:dev
+          image: docker.io/library/python:3.12-slim
           imagePullPolicy: IfNotPresent
+          workingDir: /app
+          command: [python, -m, uvicorn, "dashboard:app", --host, 0.0.0.0, --port, "8000"]
           ports:
             - containerPort: 8000
           env:
             - name: NAMESPACE
               value: arena
             - name: ARENA_IMAGE
-              value: docker.io/library/arena:dev
+              value: docker.io/library/python:3.12-slim
+            - name: APP_CONFIGMAP
+              value: arena-app
+            - name: STATIC_DIR
+              value: /static
+            - name: PYTHONPATH
+              value: /cache/pylib
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+          volumeMounts:
+            - name: app
+              mountPath: /app
+            - name: static
+              mountPath: /static
+            - name: cache
+              mountPath: /cache
           readinessProbe:
             httpGet:
               path: /healthz
@@ -85,6 +134,17 @@ spec:
               memory: 128Mi
             limits:
               memory: 512Mi
+      volumes:
+        - name: app
+          configMap:
+            name: arena-app
+        - name: static
+          configMap:
+            name: arena-static
+        - name: cache
+          hostPath:
+            path: /var/lib/arena-cache
+            type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service
@@ -92,10 +152,8 @@ metadata:
   name: arena-dashboard
   namespace: arena
 spec:
-  type: NodePort
   selector:
     app: arena-dashboard
   ports:
     - port: 80
       targetPort: 8000
-      nodePort: 30080
