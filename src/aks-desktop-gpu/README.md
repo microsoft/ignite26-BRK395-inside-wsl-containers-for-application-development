@@ -34,16 +34,16 @@ it does not claim that every operation runs on the GPU.
   (`kubectl get runtimeclass nvidia`). This version selects it for workers only.
 - A Windows NVIDIA driver compatible with CUDA 12.8 and WSL GPU support.
   Use the Windows driver; do not install a Linux NVIDIA display driver in WSL.
-- An existing Docker or Podman installation capable of building Linux/amd64 images.
+- An existing `wslc` installation for building and saving container images.
 - Windows `kubectl` and your cluster's kubeconfig.
 - Network access approved by your organization for the CUDA image, Ubuntu
   packages, Python dependencies, Postgres image, dataset, and model downloads.
 - Cluster policies allowing the worker cache's `hostPath` volumes.
 
 This is the local cluster created by `aks-desktop.exe`, not an Azure-hosted AKS
-cluster accessed from WSL. The commands below assume its kubeconfig is saved as
-`config` in your Windows Downloads folder and its distro is `Ubuntu-24.04`.
-Set `$aksDistro` and `$env:KUBECONFIG` to your actual values.
+cluster accessed from WSL. The commands below assume its distro is
+`Ubuntu-24.04`. Replace the kubeconfig path placeholder with the actual location
+of your cluster's kubeconfig, and set `$aksDistro` to your distro name.
 Do not run the original microk8s provisioning, build, or deploy scripts, and do
 not assume an image in Docker or Podman is already available to Kubernetes.
 
@@ -53,7 +53,7 @@ From the repository root, run in **Windows PowerShell**:
 
 ```powershell
 Set-Location .\src\aks-desktop-gpu
-$env:KUBECONFIG = Join-Path $HOME "Downloads\config"
+$env:KUBECONFIG = "C:\path\to\your\kubeconfig"
 $aksDistro = "Ubuntu-24.04"
 $image = "docker.io/library/arena:gpu-v2"
 $archive = Join-Path $HOME "Downloads\arena-gpu-v2.tar"
@@ -79,12 +79,11 @@ the intended kubeconfig; that address is not the Arena's Kubernetes API.
 
 ## Build and save the image
 
-Continue in the same terminal. Choose **one** builder:
+Continue in the same terminal. Use `wslc` as the builder; it defaults to
+`linux/amd64`, so no platform parameter is needed:
 
 ```powershell
-$builder = "docker"
-# Or, if you use Podman:
-# $builder = "podman"
+$builder = "wslc"
 ```
 
 Use the default Python index, or set an IT-approved package feed. If your
@@ -96,14 +95,10 @@ $pipIndexUrl = ""
 # Only if approved by IT:
 # $pipIndexUrl = "https://packagefeedproxy.microsoft.io/pypi/simple/"
 
-& $builder build --platform linux/amd64 --build-arg "PIP_INDEX_URL=$pipIndexUrl" -t $image .\app
+& $builder build --build-arg "PIP_INDEX_URL=$pipIndexUrl" -t $image .\app
 if ($LASTEXITCODE -ne 0) { throw "Image build failed; do not proceed to save or import." }
 
-if ($builder -eq "podman") {
-    & $builder save --format docker-archive --output $archive $image
-} else {
-    & $builder save --output $archive $image
-}
+& $builder save --output $archive $image
 if ($LASTEXITCODE -ne 0) { throw "Image save failed." }
 if (!(Test-Path -LiteralPath $archive)) { throw "Image archive not found: $archive" }
 ```
@@ -183,7 +178,7 @@ they do not choose a GPU. Models run serially because each reserves one GPU.
 In another Windows PowerShell terminal, start monitoring before the benchmark:
 
 ```powershell
-$env:KUBECONFIG = Join-Path $HOME "Downloads\config"
+$env:KUBECONFIG = "C:\path\to\your\kubeconfig"
 wsl -d Ubuntu-24.04 --exec /usr/lib/wsl/lib/nvidia-smi -l 1
 ```
 
