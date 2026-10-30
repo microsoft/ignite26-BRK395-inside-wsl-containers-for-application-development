@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="HotTakes.Api/HotTakes.Api.csproj" />
+  <Project Path="HotTakes.AppHost/HotTakes.AppHost.csproj" />
+  <Project Path="HotTakes.ServiceDefaults/HotTakes.ServiceDefaults.csproj" />
+  <Project Path="HotTakes.Web/HotTakes.Web.csproj" />
+</Solution>

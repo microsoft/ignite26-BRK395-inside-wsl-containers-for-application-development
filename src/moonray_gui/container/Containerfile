@@ -1,0 +1,84 @@
+# MoonRay + Arras container image for WSL Containers (WSLc)
+#
+# Builds OpenMoonRay (which bundles the arras distributed-rendering stack) on
+# Rocky Linux 9, following the upstream container recipe:
+#   https://docs.openmoonray.org/getting-started/installation/building-moonray/rocky9_container_build/
+#
+# The resulting image exposes:
+#   * moonray               - the batch renderer (used by renderer/moonray.exe)
+#   * moonray-progressive   - progressive-refinement helper (used by the C# viewer)
+#   * arras_render          - the arras interactive client (WSLg GUI path)
+#
+# NOTE: this is a from-source build and can take a long time (tens of minutes to
+# a few hours) the first time. Subsequent builds reuse the layer cache.
+
+FROM rockylinux:9
+
+# Step 1: Clone openmoonray source (includes arras4_core, moonray, arras_render)
+RUN dnf install -y git git-lfs && \
+    git lfs install && \
+    git clone --recurse-submodules https://github.com/OpenMoonRay/openmoonray.git /source
+
+# Step 2: Install base requirements (no CUDA for container build).
+# install_packages.sh downloads cmake 3.23.1 to /installs/
+RUN bash -c 'source /source/building/Rocky9/install_packages.sh --nocuda'
+
+# Put the downloaded cmake 3.23.1 in PATH for all subsequent steps
+ENV PATH="/installs/cmake-3.23.1-linux-x86_64/bin:${PATH}"
+
+# Step 3: Build remaining dependencies from source (install to /opt/MoonRay/installs)
+RUN mkdir /build && \
+    cd /build && \
+    cmake /source/building/Rocky9 && \
+    cmake --build . -- -j $(nproc)
+
+# Step 4: Build MoonRay + arras themselves.
+# CMAKE_PREFIX_PATH lets CMake find the deps built in step 3.
+RUN cd /build && \
+    rm -rf * && \
+    cmake /source \
+      -DCMAKE_PREFIX_PATH=/opt/MoonRay/installs \
+      -DPYTHON_EXECUTABLE=python3 \
+      -DBOOST_PYTHON_COMPONENT_NAME=python39 \
+      -DABI_VERSION=0 \
+      -DMOONRAY_USE_OPTIX=NO && \
+    cmake --build . -j $(nproc)
+
+# Step 5: Install MoonRay
+RUN mkdir -p /installs/openmoonray && \
+    cmake --install /build --prefix /installs/openmoonray
+
+# Clean up build directory to reduce image size
+RUN rm -rf /build
+
+# Workaround: WSLc containers block mbind()/move_pages() (no --security-opt).
+# Intercept syscall() to make those NUMA calls no-ops.
+COPY nobind.c /tmp/nobind.c
+RUN gcc -shared -fPIC -o /usr/lib64/libnobind.so /tmp/nobind.c -ldl && \
+    rm /tmp/nobind.c
+
+ENV LD_PRELOAD=/usr/lib64/libnobind.so
+
+# Pre-build shader descriptions so they are baked into the (read-only) image layer.
+# setup.sh runs rdl2_json_exporter to create shader_json/; doing it at build time
+# avoids a runtime failure writing into the read-only image.
+RUN bash -c 'source /installs/openmoonray/scripts/setup.sh'
+
+# Helper scripts used by the Windows apps.
+COPY moonray-progressive.sh /usr/local/bin/moonray-progressive
+COPY arras-render.sh        /usr/local/bin/arras-render
+# Strip any CR (these scripts may be authored on Windows with CRLF endings, which
+# would otherwise break the '#!/bin/bash' shebang inside the Linux container).
+RUN sed -i 's/\r$//' /usr/local/bin/moonray-progressive /usr/local/bin/arras-render && \
+    chmod +x /usr/local/bin/moonray-progressive /usr/local/bin/arras-render
+
+# Entrypoint sources the MoonRay environment (setup.sh sets PATH, RDL2_DSO_PATH,
+# etc.) then execs whatever command was requested.
+RUN printf '%s\n' \
+      '#!/bin/bash' \
+      'source /installs/openmoonray/scripts/setup.sh' \
+      'exec "$@"' > /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["bash"]

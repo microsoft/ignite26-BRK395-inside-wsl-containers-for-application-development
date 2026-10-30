@@ -1,0 +1,11 @@
+# Keep container scripts and C sources LF so they work inside the Linux image.
+# (CRLF in a COPY'd shell script breaks the shebang: "/bin/bash^M: bad interpreter".)
+*.sh    text eol=lf
+*.c     text eol=lf
+Containerfile text eol=lf
+
+# Windows-side sources keep native (CRLF) endings.
+*.cs    text
+*.xaml  text
+*.csproj text
+*.sln   text

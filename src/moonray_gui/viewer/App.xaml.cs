@@ -1,0 +1,5 @@
+namespace MoonrayArrasViewer;
+
+public partial class App : System.Windows.Application
+{
+}

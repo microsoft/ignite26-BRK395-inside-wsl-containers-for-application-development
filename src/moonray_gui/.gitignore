@@ -1,0 +1,31 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# C++ build output
+x64/
+ARM64/
+Debug/
+Release/
+*.obj
+*.pdb
+*.ilk
+*.tlog
+
+# .NET build output
+bin/
+obj/
+
+# NuGet packages (restored from NuGet.Config sources)
+packages/
+
+# Container build artifacts (regenerate with container/build-image.ps1)
+container/moonray.tar
+container/*.log
+
+# Render output (keep scene source files)
+samples/**/*.jpg
+samples/**/*.exr
+!samples/**/*.rdla
+!samples/**/*.rdlb

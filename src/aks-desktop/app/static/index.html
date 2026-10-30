@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Embedding Arena · microk8s</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c5cff'/%3E%3Cpath d='M16 6 L27 25 H5 Z' fill='none' stroke='white' stroke-width='2.5'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">⟁</div>
+      <div>
+        <div class="title">Embedding Arena</div>
+        <div class="subtitle">CPU embedding benchmark · pgvector · microk8s</div>
+      </div>
+    </div>
+    <div class="controls">
+      <span id="state-pill" class="pill state-idle">idle</span>
+      <span id="clock" class="clock">00:00</span>
+      <button id="btn-start" class="btn btn-start">▶ START</button>
+      <button id="btn-stop" class="btn btn-stop">■ STOP</button>
+      <button id="btn-reset" class="btn btn-reset">↺ RESET</button>
+      <button id="btn-settings" class="btn btn-icon" title="Settings">⚙</button>
+    </div>
+    <div id="settings" class="settings hidden">
+      <div class="settings-title">Arena settings</div>
+      <label>Models in parallel <b id="v-parallel">2</b>
+        <input id="s-parallel" type="range" min="1" max="8" step="1" value="2"></label>
+      <div class="hint">Applies immediately: new models start when a slot frees up.</div>
+      <label>CPU threads per model <b id="v-threads">4</b>
+        <input id="s-threads" type="range" min="1" max="8" step="1" value="4"></label>
+      <div class="hint">Used for models that start from now on.</div>
+      <label>Corpus size (docs) <b id="v-corpus">500</b>
+        <input id="s-corpus" type="range" min="200" max="5000" step="100" value="500"></label>
+      <div class="hint">Takes effect on the next seed (after RESET).</div>
+      <label>Rank leaderboard by
+        <select id="s-rank">
+          <option value="ndcg10">nDCG@10 (quality)</option>
+          <option value="recall10">Recall@10</option>
+          <option value="mrr10">MRR@10</option>
+          <option value="docs_per_sec">Throughput (docs/s)</option>
+          <option value="search_ms_p50">Search latency p50</option>
+          <option value="score">Balanced (quality × speed)</option>
+        </select></label>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel stage-panel">
+      <div class="panel-head">
+        <span>Cluster · namespace <code id="ns">arena</code></span>
+        <span id="stage-summary" class="muted"></span>
+      </div>
+      <div id="stage" class="stage">
+        <svg id="wires" class="wires"></svg>
+        <div id="db" class="db offline">
+          <div class="db-glow"></div>
+          <svg class="cyl" viewBox="0 0 120 140">
+            <defs>
+              <linearGradient id="cylg" x1="0" x2="1">
+                <stop offset="0" stop-color="#1b2a4a"/><stop offset=".5" stop-color="#2c4878"/><stop offset="1" stop-color="#1b2a4a"/>
+              </linearGradient>
+              <clipPath id="cylclip"><path d="M10 20 v100 a50 14 0 0 0 100 0 v-100 a50 14 0 0 1 -100 0z"/></clipPath>
+            </defs>
+            <path d="M10 20 v100 a50 14 0 0 0 100 0 v-100" fill="url(#cylg)" stroke="#5b8cff55"/>
+            <rect id="db-fill" class="db-fill" x="10" y="134" width="100" height="0" clip-path="url(#cylclip)"/>
+            <ellipse cx="60" cy="20" rx="50" ry="14" fill="#30508a" stroke="#7aa2ff88"/>
+            <path d="M10 55 a50 14 0 0 0 100 0 M10 88 a50 14 0 0 0 100 0" fill="none" stroke="#7aa2ff33"/>
+          </svg>
+          <div class="db-label">
+            <div class="db-name">arena-postgres</div>
+            <div class="db-sub">PostgreSQL 17 + pgvector</div>
+            <div id="db-phase" class="db-phase">offline</div>
+          </div>
+          <div id="db-stats" class="db-stats"></div>
+        </div>
+        <div id="pods-layer"></div>
+        <div id="idle-hint" class="idle-hint">Press <b>START</b> to spin up the database and begin the arena</div>
+      </div>
+      <div class="queue-wrap">
+        <span class="muted">Queue</span>
+        <div id="queue" class="queue"></div>
+      </div>
+    </section>
+
+    <section class="panel board-panel">
+      <div class="panel-head">
+        <span>🏆 Leaderboard</span>
+        <span id="board-sub" class="muted">BEIR SciFact retrieval</span>
+      </div>
+      <div class="board-head">
+        <span>#</span><span>Model</span><span id="metric-head">nDCG@10</span><span>R@10</span><span>docs/s</span><span>p50 ms</span>
+      </div>
+      <div id="board" class="board"></div>
+      <div id="board-empty" class="board-empty">Completed models will appear here, ranked.</div>
+    </section>
+
+    <section class="panel pods-panel">
+      <div class="panel-head"><span>kubectl get pods -n arena</span><span id="pod-count" class="muted"></span></div>
+      <div class="pods-table">
+        <div class="pt-head"><span>NAME</span><span>ROLE</span><span>STATUS</span><span>IP</span><span>AGE</span></div>
+        <div id="pods-rows"></div>
+      </div>
+    </section>
+
+    <section class="panel log-panel">
+      <div class="panel-head"><span>Event stream</span><span id="conn" class="muted">connecting…</span></div>
+      <div id="log" class="log"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
