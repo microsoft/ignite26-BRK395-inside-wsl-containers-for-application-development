@@ -18,7 +18,7 @@ dashboard using an Intel GPU; that does not select the embedding device.
 - Only benchmark workers reserve `nvidia.com/gpu: 1`; the seeder and dashboard do not.
 - Benchmark workers select `runtimeClassName: nvidia` so AKS Desktop injects the
   WSL NVIDIA driver libraries and devices; GPU allocation alone is not sufficient.
-- The default and maximum concurrency are one model, for a single-GPU node.
+- Concurrency defaults to two models and can scale up to four, each reserving one GPU resource.
 - Resources use the separate `arena-gpu` namespace. The CPU Arena in `arena` is
   not modified or cleaned up by this dashboard.
 
@@ -28,37 +28,55 @@ it does not claim that every operation runs on the GPU.
 
 ## Prerequisites
 
-- An existing local AKS Desktop cluster with its NVIDIA device plugin working.
-  `kubectl describe node` should list `nvidia.com/gpu: 1` under allocatable resources.
-- A `nvidia` RuntimeClass backed by NVIDIA Container Runtime
-  (`kubectl get runtimeclass nvidia`). This version selects it for workers only.
+- Windows with WSL 2 available and an NVIDIA GPU supported in WSL.
 - A Windows NVIDIA driver compatible with CUDA 12.8 and WSL GPU support.
   Use the Windows driver; do not install a Linux NVIDIA display driver in WSL.
 - An existing `wslc` installation for building and saving container images.
-- Windows `kubectl` and your cluster's kubeconfig.
+- Windows PowerShell and `kubectl`.
+- The bundled [`aks-devctl.exe`](k8s/aks-devctl.exe). The commands below use
+  this executable directly; if it is on your `PATH`, you can use `aks-devctl`
+  instead of `.\k8s\aks-devctl.exe`.
 - Network access approved by your organization for the CUDA image, Ubuntu
-  packages, Python dependencies, Postgres image, dataset, and model downloads.
+  packages, cluster artifacts, Python dependencies, Postgres image, dataset,
+  and model downloads.
 - Cluster policies allowing the worker cache's `hostPath` volumes.
 
-This is the local cluster created by `aks-desktop.exe`, not an Azure-hosted AKS
-cluster accessed from WSL. The commands below assume its distro is
-`Ubuntu-24.04`. Replace the kubeconfig path placeholder with the actual location
-of your cluster's kubeconfig, and set `$aksDistro` to your distro name.
-Do not run the original microk8s provisioning, build, or deploy scripts, and do
-not assume an image in Docker or Podman is already available to Kubernetes.
-
-## Select the cluster
+## Create the GPU-enabled cluster
 
 From the repository root, run in **Windows PowerShell**:
 
 ```powershell
 Set-Location .\src\aks-desktop-gpu
-$env:KUBECONFIG = "C:\path\to\your\kubeconfig"
-$aksDistro = "Ubuntu-24.04"
-$image = "docker.io/library/arena:gpu-v2"
-$archive = Join-Path $HOME "Downloads\arena-gpu-v2.tar"
 
-if (!(Test-Path -LiteralPath $env:KUBECONFIG)) { throw "Kubeconfig not found: $env:KUBECONFIG" }
+.\k8s\aks-devctl.exe cluster create --name dev-cluster --kubernetes-version v1.36.5 --enable-gpu --nvidia-gpu-sharing 4 --kubeconfig-file dev-kubeconfig
+if ($LASTEXITCODE -ne 0) { throw "Cluster creation failed; inspect the command output before continuing." }
+```
+
+This creates a local AKS Desktop cluster, not an Azure-hosted AKS cluster.
+On Windows, `dev-cluster` is also the WSL instance name. GPU support is enabled,
+and NVIDIA time-slicing exposes four schedulable slots per physical GPU.
+These slots share the physical GPU's compute and VRAM; they are not four
+independent GPUs and do not provide memory or compute isolation.
+
+The generated `dev-kubeconfig` is written in this demo folder. It contains
+cluster access credentials: keep it local and do not commit or share it.
+The CLI also creates local settings beside its executable; those settings,
+kubeconfigs, and image archives are ignored by this demo's `.gitignore`.
+
+Creation rejects an existing WSL instance with the same name and rejects an
+existing kubeconfig file unless explicitly authorized to overwrite it. If you
+already created this cluster, skip creation and use its generated kubeconfig;
+do not delete an existing cluster or overwrite credentials just to rerun this guide.
+
+## Use the generated kubeconfig
+
+Continue in the GPU demo folder:
+
+```powershell
+$env:KUBECONFIG = (Resolve-Path .\dev-kubeconfig -ErrorAction Stop).Path
+$aksDistro = "dev-cluster"
+$image = "docker.io/library/arena:gpu-v2"
+$archive = Join-Path $PWD "app\arena-gpu.tar"
 
 kubectl config current-context
 kubectl get nodes -o wide
@@ -68,23 +86,28 @@ wsl --list --verbose
 wsl -d $aksDistro --exec /usr/lib/wsl/lib/nvidia-smi
 ```
 
-Confirm the intended node is **Ready**, advertises an allocatable
-`nvidia.com/gpu`, and has enough free CPU/memory. Both the `nvidia` RuntimeClass
-and the WSL NVIDIA driver must be available before continuing. This application
-does not install or configure them.
+Confirm the intended node is **Ready**, advertises four allocatable
+`nvidia.com/gpu` slots per physical GPU, and has enough free CPU/memory.
+Both the `nvidia` RuntimeClass and the WSL NVIDIA driver must be available
+before continuing. With fewer than two free slots, lower **Models in parallel**
+in **Settings**; otherwise, excess workers remain pending.
 
 `KUBECONFIG` is set only for this PowerShell session. Repeat that assignment in
-each new terminal. If `kubectl` tries `http://localhost:8080/api`, it is not using
-the intended kubeconfig; that address is not the Arena's Kubernetes API.
-
-## Build and save the image
-
-Continue in the same terminal. Use `wslc` as the builder; it defaults to
-`linux/amd64`, so no platform parameter is needed:
+each new terminal, from the GPU demo folder. Alternatively, pass the file
+explicitly to an individual command:
 
 ```powershell
-$builder = "wslc"
+kubectl --kubeconfig .\dev-kubeconfig get pods --all-namespaces
 ```
+
+If `kubectl` tries `http://localhost:8080/api`, it is not using the intended
+kubeconfig; that address is not the Arena's Kubernetes API.
+
+## Build the Arena image
+
+Continue in the same terminal. Use `wslc` as the builder; it defaults to
+`linux/amd64`, so no platform parameter is needed. The preparation script does
+not build the image: complete this step first.
 
 Use the default Python index, or set an IT-approved package feed. If your
 organization blocks `files.pythonhosted.org`, obtain an approved feed before
@@ -95,25 +118,47 @@ $pipIndexUrl = ""
 # Only if approved by IT:
 # $pipIndexUrl = "https://packagefeedproxy.microsoft.io/pypi/simple/"
 
-& $builder build --build-arg "PIP_INDEX_URL=$pipIndexUrl" -t $image .\app
+wslc build --build-arg "PIP_INDEX_URL=$pipIndexUrl" -t $image .\app
 if ($LASTEXITCODE -ne 0) { throw "Image build failed; do not proceed to save or import." }
-
-& $builder save --output $archive $image
-if ($LASTEXITCODE -ne 0) { throw "Image save failed." }
-if (!(Test-Path -LiteralPath $archive)) { throw "Image archive not found: $archive" }
 ```
 
 The CUDA image is significantly larger than the CPU image. If corporate
 security blocks a download, use an approved feed or request access from IT.
 Do not disable TLS verification or endpoint protection.
+The app's `.dockerignore` keeps local executables, settings, kubeconfigs, and
+saved image archives out of the image build.
 
-## Import into the cluster
+## Prepare the demo environment
+
+Choose **one** of the following paths. Both save the built image as an archive
+and import it into the cluster's containerd `k8s.io` namespace. An image in
+Docker, Podman, or the builder's image store alone is not available to Kubernetes.
+
+### Use the preparation script
+
+From the GPU demo folder, in the same terminal:
+
+```powershell
+.\app\prepare-demo.ps1 -Distro $aksDistro -Image $image -ArchivePath $archive
+```
+
+The script stops on WSL, save, path conversion, or import errors.
+With the standard names used in this guide, `.\app\prepare-demo.ps1` without
+arguments uses the same distro, image tag, and archive location. It does not
+create the cluster, build the image, deploy Kubernetes resources, or start
+port-forwarding.
+
+### Run the preparation commands manually
 
 Continue in the same terminal. `--exec` bypasses the Linux shell, which otherwise
 can strip backslashes from a Windows path passed to `wslpath`. Check the command
 result before calling `.Trim()`:
 
 ```powershell
+wslc save --output $archive $image
+if ($LASTEXITCODE -ne 0) { throw "Image save failed." }
+if (!(Test-Path -LiteralPath $archive)) { throw "Image archive not found: $archive" }
+
 $linuxArchive = wsl -d $aksDistro --exec wslpath -u "$archive"
 if ($LASTEXITCODE -ne 0 -or !$linuxArchive) { throw "Could not convert the archive path for WSL." }
 $linuxArchive = $linuxArchive.Trim()
@@ -123,7 +168,13 @@ if ($LASTEXITCODE -ne 0) { throw "Archive is not visible inside the cluster dist
 
 wsl -d $aksDistro -u root --exec ctr --namespace k8s.io images import "$linuxArchive"
 if ($LASTEXITCODE -ne 0) { throw "Image import failed." }
+```
 
+### Verify the imported image
+
+After either preparation path, check the exact tag:
+
+```powershell
 $images = @(wsl -d $aksDistro -u root --exec ctr --namespace k8s.io images list --quiet)
 if ($LASTEXITCODE -ne 0 -or $image -notin $images) { throw "Expected image is missing from the cluster: $image" }
 $images | Where-Object { $_ -eq $image }
@@ -141,7 +192,13 @@ differs, use its Kubernetes runtime endpoint; do not install another containerd.
 For a multi-node cluster, import into each eligible node's Kubernetes image store
 or use an approved registry accessible to every node.
 
-## Deploy and open the dashboard
+## Create the deployment
+
+Apply the supplied manifest rather than a standalone
+`kubectl create deployment` command. The manifest creates namespace `arena-gpu`, the dashboard's
+ServiceAccount and namespace-scoped RBAC, the `arena-dashboard` Deployment,
+and its ClusterIP Service. The dashboard needs that RBAC to create the database,
+seeder, and benchmark Jobs.
 
 ```powershell
 kubectl apply -f .\k8s\arena.yaml
@@ -151,14 +208,30 @@ kubectl -n arena-gpu rollout status deployment/arena-dashboard --timeout=180s
 if ($LASTEXITCODE -ne 0) { throw "Dashboard did not become ready; inspect its pod and events." }
 
 kubectl -n arena-gpu get pods
-kubectl -n arena-gpu port-forward service/arena-dashboard 8081:80
+kubectl -n arena-gpu get deployment,service
+```
+
+## Set up port-forwarding
+
+In another Windows PowerShell terminal, from the GPU demo folder:
+
+```powershell
+$env:KUBECONFIG = (Resolve-Path .\dev-kubeconfig -ErrorAction Stop).Path
+kubectl -n arena-gpu port-forward --address 127.0.0.1 service/arena-dashboard 8081:80
 ```
 
 Keep the terminal open and browse to **http://localhost:8081**. This leaves port
-8080 available for the CPU dashboard.
+8080 available for the CPU dashboard. Port `8081` on Windows forwards to the
+Service's port `80`, which routes to the dashboard container's port `8000`.
+Press **Ctrl+C** to stop forwarding; rerun the command if the dashboard pod is
+replaced.
+
+## Run the Arena app
 
 Select **START**. The dashboard creates Postgres, seeds the dataset, then runs
-one GPU benchmark Job at a time. Only pods labeled `arena/role=worker` request
+two GPU benchmark Jobs at a time by default. Raise **Models in parallel** to
+three or four during the run to launch additional queued models without restarting.
+Only pods labeled `arena/role=worker` request
 the GPU and select `runtimeClassName: nvidia`. The namespace also contains
 CPU-based dashboard, seeder, and database pods.
 
@@ -171,15 +244,17 @@ characters. To run a larger workload:
 
 The next seed includes up to 5000 documents. Settings survive RESET but not a
 dashboard restart. CPU threads per model still control CPU-side processing;
-they do not choose a GPU. Models run serially because each reserves one GPU.
+they do not choose a GPU. **Models in parallel** can be set from one to four;
+each worker reserves one GPU resource.
 
 ## Verify GPU execution
 
-In another Windows PowerShell terminal, start monitoring before the benchmark:
+In another Windows PowerShell terminal, from the GPU demo folder, start
+monitoring before the benchmark:
 
 ```powershell
-$env:KUBECONFIG = "C:\path\to\your\kubeconfig"
-wsl -d Ubuntu-24.04 --exec /usr/lib/wsl/lib/nvidia-smi -l 1
+$env:KUBECONFIG = (Resolve-Path .\dev-kubeconfig -ErrorAction Stop).Path
+wsl -d dev-cluster --exec /usr/lib/wsl/lib/nvidia-smi -l 1
 ```
 
 Press **Ctrl+C** to stop monitoring. This works across short-lived workers;
@@ -262,10 +337,10 @@ kubectl describe nodes
 - **Archive not found:** do not continue after a failed build or save. Check the
   Windows `$archive` path before importing it.
 - **`wslpath` loses backslashes or `.Trim()` fails:** use `--exec` and check its
-  exit code as shown above. A manually specified `/mnt/c/.../arena-gpu-v2.tar`
+  exit code as shown above. A manually specified `/mnt/c/.../arena-gpu.tar`
   path is also valid if it points to the saved archive.
 - **ImagePullBackOff:** confirm the exact image tag was imported into
-  `Ubuntu-24.04` in containerd's `k8s.io` namespace. A local Docker/Podman image
+  `dev-cluster` in containerd's `k8s.io` namespace. A local Docker/Podman image
   alone is not visible to Kubernetes.
 - **Rollout waits with zero new replicas:** inspect
   `kubectl -n arena-gpu describe deployment arena-dashboard`,
@@ -281,7 +356,8 @@ kubectl describe nodes
   worker pod has `runtimeClassName: nvidia` and that the cluster's NVIDIA runtime
   is configured. Do not copy host driver libraries into the application image.
 - **GPU out of memory:** inspect `nvidia-smi` for other GPU users. Large models
-  may exceed the laptop's VRAM even when Kubernetes exposes one GPU.
+  may exceed the laptop's VRAM. If allocatable GPU resources share a physical
+  GPU, concurrent workers also share its VRAM; reduce **Models in parallel**.
 - **Download blocked:** request approved access or a mirror from IT. Build-time
   Python feed settings do not configure runtime dataset/model downloads.
 - **ONNX warning about `/sys/class/drm/card0/device/vendor`:** this was observed

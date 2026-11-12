@@ -26,9 +26,9 @@
     </div>
     <div id="settings" class="settings hidden">
       <div class="settings-title">Arena settings</div>
-      <label>Models in parallel <b id="v-parallel">1</b>
-        <input id="s-parallel" type="range" min="1" max="1" step="1" value="1" disabled></label>
-      <div class="hint">One model at a time; each benchmark worker reserves one NVIDIA GPU.</div>
+      <label>Models in parallel <b id="v-parallel">2</b>
+        <input id="s-parallel" type="range" min="1" max="4" step="1" value="2"></label>
+      <div class="hint">Up to four models at a time; each benchmark worker reserves one NVIDIA GPU resource.</div>
       <label>CPU threads per model <b id="v-threads">4</b>
         <input id="s-threads" type="range" min="1" max="8" step="1" value="4"></label>
       <div class="hint">Used for models that start from now on.</div>

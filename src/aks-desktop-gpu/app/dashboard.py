@@ -41,7 +41,7 @@ batch = client.BatchV1Api()
 
 class Arena:
     def __init__(self):
-        self.settings = {"max_parallel": 1, "threads": 4, "corpus_size": 500}
+        self.settings = {"max_parallel": 2, "threads": 4, "corpus_size": 500}
         self.lock = asyncio.Lock()
         self.events = collections.deque(maxlen=250)
         self.pods = []
@@ -431,7 +431,7 @@ async def reset():
 @app.post("/api/settings")
 async def settings(req: Request):
     body = await req.json()
-    limits = {"max_parallel": (1, 1), "threads": (1, 8), "corpus_size": (200, 5000)}
+    limits = {"max_parallel": (1, 4), "threads": (1, 8), "corpus_size": (200, 5000)}
     for k, (lo, hi) in limits.items():
         if k in body:
             arena.settings[k] = max(lo, min(hi, int(body[k])))
