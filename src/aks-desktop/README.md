@@ -1,8 +1,6 @@
-# aks-desktop
+# Embedding Arena on AKS Desktop
 
-Embedding Arena on microk8s.
-
-This is a live, visual benchmark of 14 open-source embedding models running on **CPU**. Everything runs in microk8s inside WSL Debian:
+This is a live, visual benchmark of 14 open-source embedding models running on **CPU**. Everything runs on an existing local AKS Desktop cluster inside WSL:
 
 - the vector database
 - a dataset seeder
@@ -12,28 +10,119 @@ A web dashboard shows what Kubernetes is doing as the run progresses.
 
 ![flow](https://img.shields.io/badge/flow-START%20→%20DB%20→%20seed%20→%20benchmarks%20→%20leaderboard-7c5cff)
 
-## Quick start
+## Prerequisites
 
-From Windows PowerShell:
+- An existing local cluster created by `aks-desktop.exe`, with a Ready node and
+  working cluster DNS. This guide does not install or provision a cluster.
+- Windows `kubectl` and the cluster's kubeconfig.
+- An existing `wslc` installation for building and saving Linux container images.
+- Network access approved by your organization for the Python base image,
+  Python dependencies, Postgres image, dataset, and model downloads.
+- Cluster policies allowing the workers' cache at `/var/lib/arena-cache`
+  (`hostPath`).
+
+No GPU or NVIDIA runtime is required. The CPU Arena uses namespace `arena` and
+port `8080`; [the GPU Arena](../aks-desktop-gpu/README.md) uses `arena-gpu` and
+port `8081`.
+
+## Select the cluster
+
+From the repository root, run in **Windows PowerShell**. Replace the kubeconfig
+placeholder and set `$aksDistro` to the WSL distro used by your AKS Desktop
+cluster; `Ubuntu-24.04` is the example used in the GPU setup guide.
 
 ```powershell
-.\scripts\setup-wsl.ps1
+Set-Location .\src\aks-desktop
+$env:KUBECONFIG = "C:\path\to\your\kubeconfig"
+$aksDistro = "Ubuntu-24.04"
+$image = "docker.io/library/arena:dev"
+$archive = Join-Path $HOME "Downloads\arena-cpu.tar"
+
+if (!(Test-Path -LiteralPath $env:KUBECONFIG)) { throw "Kubeconfig not found: $env:KUBECONFIG" }
+
+kubectl config current-context
+kubectl get nodes -o wide
+wsl --list --verbose
 ```
 
-The script is idempotent. It:
+Confirm that the context and distro belong to the intended local cluster and
+that the node is **Ready**, with enough free CPU and memory. `KUBECONFIG` is set
+only for this terminal; repeat the assignment in each new terminal.
 
-- runs `wsl --install -d Debian`
-- makes root and sudo passwordless
-- enables systemd
-- installs microk8s (with `dns` and `hostpath-storage`) and podman
-- builds and deploys the arena
-- opens **http://localhost:8080**
+## Build and save the image
 
-If the distro is already provisioned, redeploy after code changes from inside Debian:
+Continue in the same terminal. `wslc` defaults to `linux/amd64`.
+Use the default Python index, or set an IT-approved package feed:
 
-```bash
-bash /mnt/c/cDev/ignite26-brk395/src/aks-desktop/scripts/deploy.sh
+```powershell
+$pipIndexUrl = ""
+# Only if approved by IT:
+# $pipIndexUrl = "https://packagefeedproxy.microsoft.io/pypi/simple/"
+
+wslc build --build-arg "PIP_INDEX_URL=$pipIndexUrl" -t $image .\app
+if ($LASTEXITCODE -ne 0) { throw "Image build failed; do not proceed to save or import." }
+
+wslc save --output $archive $image
+if ($LASTEXITCODE -ne 0) { throw "Image save failed." }
+if (!(Test-Path -LiteralPath $archive)) { throw "Image archive not found: $archive" }
 ```
+
+## Import into the cluster
+
+Import into the cluster's Kubernetes image store, not a separate Docker or
+Podman image store. These commands follow the containerd default socket and
+`k8s.io` namespace used by the GPU setup guide. If your installation differs,
+use its Kubernetes runtime endpoint; do not install another containerd.
+
+```powershell
+$linuxArchive = wsl -d $aksDistro --exec wslpath -u "$archive"
+if ($LASTEXITCODE -ne 0 -or !$linuxArchive) { throw "Could not convert the archive path for WSL." }
+$linuxArchive = $linuxArchive.Trim()
+
+wsl -d $aksDistro --exec test -f "$linuxArchive"
+if ($LASTEXITCODE -ne 0) { throw "Archive is not visible inside the cluster distro: $linuxArchive" }
+
+wsl -d $aksDistro -u root --exec ctr --namespace k8s.io images import "$linuxArchive"
+if ($LASTEXITCODE -ne 0) { throw "Image import failed." }
+
+$images = @(wsl -d $aksDistro -u root --exec ctr --namespace k8s.io images list --quiet)
+if ($LASTEXITCODE -ne 0 -or $image -notin $images) { throw "Expected image is missing from the cluster: $image" }
+$images | Where-Object { $_ -eq $image }
+```
+
+The exact tag must be `docker.io/library/arena:dev`, matching both `image` and
+`ARENA_IMAGE` in `k8s\arena.yaml`. The manifest uses `IfNotPresent`.
+For a multi-node cluster, import into each eligible node's Kubernetes image
+store or use an approved registry accessible to every node.
+
+## Deploy and open the dashboard
+
+```powershell
+kubectl apply -f .\k8s\arena.yaml
+if ($LASTEXITCODE -ne 0) { throw "Deployment failed." }
+
+kubectl -n arena rollout status deployment/arena-dashboard --timeout=180s
+if ($LASTEXITCODE -ne 0) { throw "Dashboard did not become ready; inspect its pod and events." }
+
+kubectl -n arena get pods
+kubectl -n arena port-forward service/arena-dashboard 8080:80
+```
+
+Keep the terminal open and browse to **http://localhost:8080**.
+
+After code changes, repeat the build, save, and import steps, then restart the
+dashboard so it uses the newly imported image:
+
+```powershell
+kubectl -n arena rollout restart deployment/arena-dashboard
+if ($LASTEXITCODE -ne 0) { throw "Dashboard restart failed." }
+kubectl -n arena rollout status deployment/arena-dashboard --timeout=180s
+if ($LASTEXITCODE -ne 0) { throw "Dashboard did not become ready; inspect its pod and events." }
+```
+
+Re-establish port-forwarding if the dashboard pod was replaced. Stop a running
+benchmark before rebuilding; restart it afterward to launch new workers with
+the updated image.
 
 ## Using the dashboard
 
@@ -83,7 +172,7 @@ The models are BGE Small, Base and Large v1.5; all-MiniLM-L6-v2; Multilingual Mi
 ```
 
 - The orchestrator loop (`app/dashboard.py`) keeps `max_parallel` benchmark Jobs running, tracks pods and events, and pushes a full snapshot to every browser about twice a second.
-- A single image, `arena:dev`, holds the dashboard, the seeder and the worker. It is built with podman and imported into microk8s' containerd (`scripts/build.sh`).
+- A single image, `docker.io/library/arena:dev`, holds the dashboard, the seeder and the worker. It is built with `wslc` and imported into the AKS Desktop cluster's containerd image store.
 - Model weights and the dataset are cached on the node at `/var/lib/arena-cache` (hostPath), so later runs start instantly.
 
 ## Layout
@@ -91,27 +180,32 @@ The models are BGE Small, Base and Large v1.5; all-MiniLM-L6-v2; Multilingual Mi
 ```
 app/                 dashboard.py · worker.py · seed.py · catalog.py · common.py · static/ (UI)
 k8s/arena.yaml       namespace, RBAC, dashboard Deployment + Service
-scripts/setup-wsl.ps1      Windows entry point (install + provision + deploy)
-scripts/setup-debian.sh    root provisioning inside the distro
-scripts/deploy.sh          build image → apply → rollout → port-forward unit
-scripts/build.sh           podman build + import into microk8s
-scripts/wsl-net-fix.*      WSL networking workarounds (systemd service + timer)
-scripts/arena-portforward.service   exposes the dashboard on :8080 for Windows
 ```
 
-## Environment notes and workarounds
+## Environment notes
 
-- **WSL "Consomme" networking:** in this mode, every TCP connection to `127.0.0.0/8` inside the distro is routed through Windows. The relay mirrors kubelite's dual-stack `[::]:16443` listener as IPv6-only, so `kubectl` gets *connection refused* on `127.0.0.1:16443`. `wsl-net-fix.sh` adds narrowly scoped `ip rule`s that keep ports 16443 and 25000 on the Linux loopback.
-  - The same script also whitelists Calico interfaces in Docker's `DOCKER-USER` chain. Docker sets the FORWARD policy to DROP, which breaks pod networking.
-- **Dashboard access:** an explicit IPv4 listener (`kubectl port-forward --address 0.0.0.0 … 8080:80`) *is* mirrored to Windows, which is why `http://localhost:8080` works. The NodePort 30080 is also available on the distro's IP.
-- **Corporate networks:** if `files.pythonhosted.org` is blocked, `build.sh` falls back to `https://packagefeedproxy.microsoft.io/pypi/simple/`. You can override this with `PIP_INDEX_URL=...`. Hugging Face (model weights) must be reachable from the pods.
-- **podman builds** use `--network=host` because the default podman network inside WSL has no DNS.
+- **Dashboard access:** Windows `kubectl port-forward` provides local access
+  without installing a Linux service or changing WSL networking rules.
+- **Corporate networks:** if downloads are blocked, obtain an approved feed or
+  request access from IT. Build-time Python feed settings do not configure
+  runtime dataset or model downloads. Hugging Face must be reachable from the
+  pods. Do not disable TLS verification or endpoint protection.
+- **Local images:** `docker.io/library/arena:dev` is a local demo tag, not a
+  published image. A Docker Hub "access denied" error means the image is
+  missing from the cluster's image store or named differently.
 
 ## Troubleshooting
 
-```bash
-sudo microk8s kubectl -n arena get pods,jobs
-sudo microk8s kubectl -n arena logs deploy/arena-dashboard
-sudo microk8s kubectl -n arena logs job/bench-<model>-<run>
-systemctl status arena-portforward wsl-net-fix.timer
+```powershell
+kubectl config current-context
+kubectl -n arena get pods,jobs
+kubectl -n arena get events --sort-by=.lastTimestamp
+kubectl -n arena logs deployment/arena-dashboard
+# Replace the placeholder with a Job name from the list above.
+kubectl -n arena logs job/<job-name>
 ```
+
+If `kubectl` tries `http://localhost:8080/api`, set `KUBECONFIG` to the intended
+cluster's kubeconfig; that address is not the Arena's Kubernetes API. For
+pending workers, inspect their pod events and available CPU/memory, and lower
+**Models in parallel** if necessary.
