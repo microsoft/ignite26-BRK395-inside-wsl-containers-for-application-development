@@ -1,0 +1,8 @@
+fastembed-gpu==0.9.0
+onnxruntime-gpu==1.23.2
+numpy>=1.26
+psycopg[binary]>=3.2
+pgvector>=0.4
+fastapi>=0.118
+uvicorn[standard]>=0.37
+kubernetes>=33

@@ -21,10 +21,10 @@ From the repository root in PowerShell:
 ```powershell
 cd src\gpu-fractal
 wslc build --progress plain -f Containerfile -t gpu-fractal:demo .
-wslc run -d --name gpu-fractal --hostname cuda-canvas --gpus all -p 127.0.0.1:8081:8000 --mount "type=bind,source=$($PWD.Path),target=/app,readonly" gpu-fractal:demo
+wslc run -d --name gpu-fractal --hostname cuda-canvas --gpus all -p 127.0.0.1:8090:8090 --mount "type=bind,source=$($PWD.Path),target=/app,readonly" gpu-fractal:demo
 ```
 
-Open **http://127.0.0.1:8081**. The first page load renders a real GPU frame.
+Open **http://127.0.0.1:8090**. The first page load renders a real GPU frame.
 
 The Containerfile installs Python and curl. WSLC exposes `/dev/dxg` and the NVIDIA
 CUDA driver when `--gpus all` is supplied. The application uses Python's `ctypes`

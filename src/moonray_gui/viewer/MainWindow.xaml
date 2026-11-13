@@ -1,0 +1,109 @@
+<Window x:Class="MoonrayArrasViewer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MoonRay Arras Viewer (WSL Containers)" Height="820" Width="1120"
+        Background="#1E1E1E">
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="MinWidth" Value="90" />
+        </Style>
+        <Style TargetType="TextBlock" x:Key="Label">
+            <Setter Property="Foreground" Value="#DDDDDD" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="150" />
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" Style="{StaticResource Label}" Text="Scene:" Margin="0,0,8,0" />
+            <TextBox   Grid.Column="1" x:Name="SceneBox" VerticalContentAlignment="Center"
+                       IsReadOnly="True" Background="#2D2D2D" Foreground="#EEEEEE"
+                       BorderBrush="#3F3F46" Padding="6,4" Margin="0,0,8,0" />
+            <Button    Grid.Column="2" x:Name="BrowseButton" Content="Browse..." Click="OnBrowse" />
+            <Button    Grid.Column="3" x:Name="StartButton" Content="Start" Click="OnStartStop"
+                       Background="#0E639C" Foreground="White" FontWeight="SemiBold" />
+        </Grid>
+
+        <!-- Detail / speed slider -->
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="220" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Style="{StaticResource Label}" Text="Faster" Margin="0,0,8,0" Foreground="#9A9A9A" />
+            <!-- Slider value = resolution divisor. Higher = coarser/faster. Inverted so the
+                 knob moves right for "sharper". -->
+            <Slider    Grid.Column="1" x:Name="DetailSlider" Minimum="1" Maximum="16"
+                       Value="4" IsDirectionReversed="True" TickFrequency="1" IsSnapToTickEnabled="True"
+                       VerticalAlignment="Center" ValueChanged="OnDetailChanged" />
+            <TextBlock Grid.Column="2" Style="{StaticResource Label}" Text="Sharper" Margin="8,0,16,0" Foreground="#9A9A9A" />
+            <TextBlock Grid.Column="3" x:Name="DetailText" Style="{StaticResource Label}"
+                       Text="1/16 resolution" Foreground="#9A9A9A" />
+        </Grid>
+
+        <!-- Image surface (drag to orbit) -->
+        <Border Grid.Row="2" Background="#111111" BorderBrush="#3F3F46" BorderThickness="1"
+                x:Name="ViewportBorder" ClipToBounds="True"
+                MouseLeftButtonDown="OnViewportMouseDown"
+                MouseLeftButtonUp="OnViewportMouseUp"
+                MouseMove="OnViewportMouseMove"
+                MouseLeave="OnViewportMouseUp"
+                Cursor="SizeAll">
+            <Grid>
+                <Image x:Name="FrameImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
+                <TextBlock x:Name="Placeholder" Style="{StaticResource Label}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Foreground="#777777" FontSize="16" TextAlignment="Center"
+                           Text="Press Start, then drag on the image to orbit and use W/A/S/D to move the camera.&#x0a;MoonRay renders live inside the WSL container - the view follows your input instantly and refines as patches come in." />
+                <Border x:Name="HintBadge" HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Margin="10" Padding="8,4" CornerRadius="4" Background="#AA000000"
+                        Visibility="Collapsed">
+                    <TextBlock Text="Drag to orbit &#183; W/A/S/D to move" Foreground="#DDDDDD" FontSize="12" />
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Status -->
+        <Grid Grid.Row="3" Margin="0,10,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" x:Name="BusyDot" Style="{StaticResource Label}"
+                       Text="&#x25CF;" Foreground="#555555" Margin="0,0,8,0" />
+            <ProgressBar Grid.Column="1" x:Name="BusyBar" Height="6" IsIndeterminate="False"
+                         Background="Transparent" BorderThickness="0" Foreground="#0E639C" />
+            <TextBlock Grid.Column="2" x:Name="StatusText" Style="{StaticResource Label}"
+                       Text="Ready." FontWeight="SemiBold" Margin="10,0,0,0" />
+        </Grid>
+
+        <!-- Log -->
+        <Border Grid.Row="4" Background="#0C0C0C" BorderBrush="#3F3F46" BorderThickness="1">
+            <TextBox x:Name="LogBox" IsReadOnly="True" Background="Transparent"
+                     Foreground="#B5CEA8" FontFamily="Cascadia Mono, Consolas"
+                     FontSize="12" BorderThickness="0"
+                     VerticalScrollBarVisibility="Auto" TextWrapping="NoWrap" />
+        </Border>
+    </Grid>
+</Window>

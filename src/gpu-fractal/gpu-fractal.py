@@ -407,6 +407,6 @@ if __name__ == '__main__':
     logging.info('CUDA ready: %s (%d MiB), Linux device /dev/dxg=%s',
                  gpu.name, gpu.total_mib, os.path.exists('/dev/dxg'))
     try:
-        ThreadingHTTPServer(('0.0.0.0', 8000), Handler).serve_forever()
+        ThreadingHTTPServer(('0.0.0.0', 8090), Handler).serve_forever()
     finally:
         gpu.close()

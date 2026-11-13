@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.exe
+*.settings.json
+*.tar
+config
+*kubeconfig*
+prepare-demo.ps1
