@@ -27,6 +27,7 @@ browser ──► web (ASP.NET) ──► api (ASP.NET) ──► Redis   (conta
 
 1. `cd C:\cDev\ignite26-brk395\src\aspire-hot-takes\HotTakes`
 2. Run **`.\demo-prep.ps1`**. It builds, pre-pulls `postgres:18.3` + `redis:8.6` into WSLc, checks that the `openvino:2026.2.1` base image is loaded, downloads the NPU model into `models\` if needed (one time, 4.4 GB), does a full warm-up run, has the bot write one take, and stops. It must end with `Ready (incl. NPU agent…)`, show `database (~300 ms)` / `cache (~5 ms)`, and print **`NPU agent wrote a take on NPU (Intel(R) AI Boost)`** in green. Yellow `on CPU` means the NPU isn't visible; see Troubleshooting.
+   CPU fallback can also occur when the NPU is visible but fails initialization; the bot chip shows the reason.
 3. Set up the screen:
    - **VS Code** on `HotTakes.AppHost\AppHost.cs`, zoomed in (`Ctrl+=` ×3).
    - **Terminal A** (big font) in the `HotTakes` folder. Run `. .\demo-env.ps1` and then `cls`.
@@ -171,6 +172,10 @@ Optional: flip **Autopilot** on. The bot posts a take every 20 s (5 max, then it
 | Bot chip stays "warming up" | `aspire logs npu-agent`. If the model is missing, re-run `.\demo-prep.ps1` (it downloads `models\Qwen3-8B-int4-cw-ov`). If `models\.cache` was deleted, the first load recompiles (~50 s). |
 | Bot chip says **⚠️ No NPU visible** | The NPU isn't visible in the container (`devices visible in container: ['CPU']` in the logs). Check the NPU driver and run `wslc run --rm --gpus all openvino:2026.2.1 python3 -c "import openvino as ov; print(ov.Core().available_devices)"`, which should list `NPU`. The demo still works on CPU (~3 s per take). |
 | Need a smaller/different model | Set `NpuAgent:Model` in `HotTakes.AppHost\appsettings.json` to another `OpenVINO/*-int4-cw-ov` model and re-run prep. |
+
+Use `.\demo-prep.ps1 -RequireNpu` when the NPU demo must be ready: it fails rather than accepting a CPU fallback. If the chip reports `zeCommandQueueCreate`, the NPU is visible but initialization failed; check that the Windows NPU driver and WSL NPU libraries are compatible.
+
+Run prep and the demo from the same non-elevated terminal; WSLc can use a separate default image session for elevated terminals. Prep stops a running AppHost before its warm-up.
 
 ---
 

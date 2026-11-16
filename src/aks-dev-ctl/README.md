@@ -1,12 +1,12 @@
-# aks-desktop
+# aks-dev-ctl
 
-Embedding Arena: a live, visual benchmark of 14 open-source embedding models running on **CPU** in a local single-node Kubernetes cluster created by `aks-desktop.exe`. The vector database, a dataset seeder and one Job per model run in the cluster, and a web dashboard shows what Kubernetes is doing as the run progresses.
+Embedding Arena: a live, visual benchmark of 14 open-source embedding models running on **CPU** in a local single-node Kubernetes cluster created by `aks-dev-ctl.exe`. The vector database, a dataset seeder and one Job per model run in the cluster, and a web dashboard shows what Kubernetes is doing as the run progresses.
 
 ![flow](https://img.shields.io/badge/flow-START%20→%20DB%20→%20seed%20→%20benchmarks%20→%20leaderboard-7c5cff)
 
 ## Prepare (before the session)
 
-Requirements: Windows with WSL, `kubectl` (`winget install Kubernetes.kubectl`), and the Microsoft-signed `aks-desktop.exe` binary in `~/Downloads`.
+Requirements: Windows with WSL, `kubectl` (`winget install Kubernetes.kubectl`), and the Microsoft-signed `aks-dev-ctl.exe` binary in `~/Downloads`.
 
 From Windows PowerShell in this folder:
 
@@ -23,7 +23,7 @@ Run these from Windows PowerShell in this folder.
 ### 1. Create the cluster
 
 ```powershell
-$aks = "$HOME\Downloads\aks-desktop.exe"
+$aks = "$HOME\Downloads\aks-dev-ctl.exe"
 & $aks cluster create --name embedding-arena --kubernetes-version v1.36.1 --provider wsl
 ```
 

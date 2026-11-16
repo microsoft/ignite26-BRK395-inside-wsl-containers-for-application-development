@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [string]$ClusterName = "embedding-arena",
-  [string]$AksDesktopPath = (Join-Path $HOME "Downloads\aks-desktop.exe"),
+  [string]$AksDesktopPath = (Join-Path $HOME "Downloads\aks-dev-ctl.exe"),
   # Also destroy the Ubuntu-24.04 WSL distro (and the cached dependencies, model weights and dataset inside it).
   [switch]$Purge
 )
@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 if (-not (Test-Path -LiteralPath $AksDesktopPath -PathType Leaf)) {
-  throw "aks-desktop.exe was not found at '$AksDesktopPath'. Pass -AksDesktopPath to select its location."
+  throw "aks-dev-ctl.exe was not found at '$AksDesktopPath'. Pass -AksDesktopPath to select its location."
 }
 
 Get-CimInstance Win32_Process -Filter "Name='kubectl.exe'" |

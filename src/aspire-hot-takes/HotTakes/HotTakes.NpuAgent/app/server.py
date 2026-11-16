@@ -1,7 +1,7 @@
 """Hot Take Bot brain: an LLM on the Intel NPU, served over HTTP from a Linux container.
 
-Pure standard library + OpenVINO GenAI. Loads MODEL on the NPU (falls back to CPU if no
-NPU is visible), then serves:
+Pure standard library + OpenVINO GenAI. Loads MODEL on the NPU (falls back to CPU if the
+NPU is unavailable or fails to initialize), then serves:
   GET  /health    200 once the model is ready, 503 while loading (drives the Aspire dashboard)
   GET  /status    {state, device, deviceName, model, ...}
   POST /generate  {"existing": [...], "topic": "..."} -> {"text", "device", "totalMs", ...}
@@ -41,7 +41,8 @@ SYSTEM = (
 
 core = ov.Core()
 state = {"state": "starting", "device": None, "deviceName": None, "model": MODEL,
-         "detail": "", "loadSeconds": None, "generated": 0, "lastMs": None}
+         "detail": "", "availableDevices": [], "fallbackReason": "",
+         "loadSeconds": None, "generated": 0, "lastMs": None}
 pipe = None
 sampling = True
 gen_lock = threading.Lock()
@@ -67,6 +68,9 @@ def load():
     global pipe
     path = os.path.join(MODEL_DIR, MODEL)
     available = core.available_devices
+    state["availableDevices"] = available
+    if "NPU" not in DEVICES:
+        state["fallbackReason"] = "NPU is not selected in DEVICES."
     log(f"devices visible in container: {available}")
     if not os.path.isdir(path):
         state.update(state="error", detail=f"model not found at {path} - run demo-prep.ps1")
@@ -75,6 +79,8 @@ def load():
     for dev in DEVICES:
         if dev not in available:
             log(f"{dev} not visible in this container - skipping")
+            if dev == "NPU":
+                state["fallbackReason"] = "NPU is not visible in WSLc; check --gpus all and the Windows NPU driver."
             continue
         cfg = {"CACHE_DIR": CACHE_DIR}
         if dev == "NPU":
@@ -95,7 +101,13 @@ def load():
             return
         except Exception as exc:
             log(f"{dev} failed: {exc}")
-            state.update(detail=f"{dev} failed: {str(exc).strip().splitlines()[-1][:200]}")
+            message = str(exc).strip() or type(exc).__name__
+            reason = f"{dev} failed: {message.splitlines()[-1][:200]}"
+            if dev == "NPU":
+                if "zeCommandQueueCreate" in message:
+                    reason += " Check the Windows NPU driver and WSL NPU libraries."
+                state["fallbackReason"] = reason
+            state.update(detail=reason)
     state.update(state="error", device=None, deviceName=None,
                  detail=state["detail"] or f"none of {DEVICES} are visible - did you pass --gpus all?")
     log(state["detail"])

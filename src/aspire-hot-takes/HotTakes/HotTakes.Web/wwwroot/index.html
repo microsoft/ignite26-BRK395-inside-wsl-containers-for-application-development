@@ -53,7 +53,7 @@
     </section>
     <div class="toolbar"><div id="badge" class="badge">Loading…</div><button id="refresh">↻ Refresh</button></div>
     <ol id="takes"></ol>
-    <footer>browser → web → api → Redis 🟥 / Postgres 🐘 / npu-agent 🧠 &nbsp;·&nbsp; containers running on WSLc, AI running on the NPU</footer>
+    <footer>browser → web → api → Redis 🟥 / Postgres 🐘 / npu-agent 🧠 &nbsp;·&nbsp; containers running on WSLc, local AI on the NPU when available</footer>
   </main>
   <script>
     const badge = document.getElementById("badge");
@@ -81,7 +81,7 @@
           if (take.author === "npu-bot") {
             const tag = document.createElement("span");
             tag.className = "tag";
-            const where = take.device === "NPU" ? "on the NPU" : `on ${take.device} (no NPU)`;
+            const where = take.device === "NPU" ? "on the NPU" : `on ${take.device} (NPU fallback)`;
             tag.textContent = `🤖 written by AI ${where}${take.genMs ? ` in ${(take.genMs / 1000).toFixed(1)} s` : ""}`;
             li.querySelector(".text").appendChild(tag);
           }
@@ -110,7 +110,7 @@
         chip.textContent = `🧠 ${model} ready on the NPU · ${a.deviceName}`;
       } else if (ready) {
         chip.className = "chip cpu";
-        chip.textContent = `⚠️ No NPU visible: ${model} is running on ${a.device} (slower)`;
+        chip.textContent = `⚠️ ${model} is running on ${a.device}: ${a.fallbackReason || "NPU not in use."}`;
       } else if (a.state === "error") {
         chip.className = "chip error";
         chip.textContent = `⚠️ NPU agent error: ${a.detail}`;

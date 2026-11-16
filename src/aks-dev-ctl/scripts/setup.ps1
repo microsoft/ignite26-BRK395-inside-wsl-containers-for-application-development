@@ -2,13 +2,13 @@
 param(
   [string]$ClusterName = "embedding-arena",
   [string]$KubernetesVersion = "v1.36.1",
-  [string]$AksDesktopPath = (Join-Path $HOME "Downloads\aks-desktop.exe"),
+  [string]$AksDesktopPath = (Join-Path $HOME "Downloads\aks-dev-ctl.exe"),
   # Skip the one-time warm-up deploy that caches the Python dependencies on the node.
   [switch]$SkipWarmup
 )
 
 # Prepares this machine for the demo. It doesn't leave a cluster running unless one already existed.
-#   1. Checks aks-desktop.exe, kubectl and WSL networking.
+#   1. Checks aks-dev-ctl.exe, kubectl and WSL networking.
 #   2. Caches the aks-desktop prerequisites (aks-desktop prereq download).
 #   3. Warm-up: deploys the project once so the Python dependencies are cached in the WSL distro
 #      (/var/lib/arena-cache survives 'cluster delete'). It creates and deletes a temporary cluster if needed.
@@ -32,7 +32,7 @@ function Test-ClusterExists {
 
 Write-Host "==> Checking prerequisites"
 if (-not (Test-Path -LiteralPath $AksDesktopPath -PathType Leaf)) {
-  throw "aks-desktop.exe was not found at '$AksDesktopPath'. Pass -AksDesktopPath to select its location."
+  throw "aks-dev-ctl.exe was not found at '$AksDesktopPath'. Pass -AksDesktopPath to select its location."
 }
 if (-not (Get-Command kubectl -ErrorAction SilentlyContinue)) {
   throw "kubectl is required. Install it with: winget install Kubernetes.kubectl"
