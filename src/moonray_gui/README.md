@@ -5,7 +5,7 @@ An interactive Windows viewer that renders scenes with the Linux **OpenMoonRay**
 ## Prerequisites
 
 - Windows with [WSL](https://learn.microsoft.com/windows/wsl/) and the WSL Container SDK (`wslc.exe`)
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- [.NET 8 SDK or later](https://dotnet.microsoft.com/download) with the Windows Desktop runtime (the viewer can use a newer installed runtime).
 
 ## Run
 

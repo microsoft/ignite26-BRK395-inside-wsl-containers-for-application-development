@@ -20,12 +20,14 @@ from kubernetes.client.rest import ApiException
 from catalog import MODELS, slug
 
 NS = os.environ.get("NAMESPACE", "arena")
-IMAGE = os.environ.get("ARENA_IMAGE", "docker.io/library/arena:dev")
+IMAGE = os.environ.get("ARENA_IMAGE", "docker.io/library/python:3.12-slim")
+APP_CONFIGMAP = os.environ.get("APP_CONFIGMAP", "arena-app")
+PYTHONPATH = os.environ.get("PYTHONPATH", "/cache/pylib")
 PG_IMAGE = os.environ.get("PG_IMAGE", "docker.io/pgvector/pgvector:pg17")
 REPORT_URL = os.environ.get("REPORT_URL", f"http://arena-dashboard.{NS}.svc.cluster.local/api/report")
 CACHE_HOST_PATH = os.environ.get("CACHE_HOST_PATH", "/var/lib/arena-cache")
 DB_DSN = f"postgresql://arena:arena@arena-postgres.{NS}.svc.cluster.local:5432/arena"
-STATIC = os.path.join(os.path.dirname(__file__), "static")
+STATIC = os.environ.get("STATIC_DIR", os.path.join(os.path.dirname(__file__), "static"))
 
 ACTIVE = {"scheduling", "connecting", "loading", "embedding", "indexing", "querying"}
 PHASES = {"connecting", "loading", "embedding", "indexing", "querying"}
@@ -138,15 +140,18 @@ def k8s_create_job(name, role, command, env, cpu_limit, mem_limit, extra_labels=
                 spec=client.V1PodSpec(
                     restart_policy="Never", termination_grace_period_seconds=2,
                     containers=[client.V1Container(
-                        name=role, image=IMAGE, image_pull_policy="IfNotPresent", command=command,
+                        name=role, image=IMAGE, image_pull_policy="IfNotPresent", command=command, working_dir="/app",
                         env=[client.V1EnvVar(name=k, value=str(v)) for k, v in {
                             "DATABASE_URL": DB_DSN, "REPORT_URL": REPORT_URL, "RUN_ID": arena.run_id,
-                            "CACHE_DIR": "/cache", "HF_HOME": "/cache/hf", "JOB_NAME": name, **env}.items()],
+                            "CACHE_DIR": "/cache", "HF_HOME": "/cache/hf", "JOB_NAME": name,
+                            "PYTHONPATH": PYTHONPATH, "PYTHONUNBUFFERED": "1", "PYTHONDONTWRITEBYTECODE": "1", **env}.items()],
                         resources=client.V1ResourceRequirements(
                             requests={"cpu": "500m", "memory": "512Mi"}, limits={"cpu": str(cpu_limit), "memory": mem_limit}),
-                        volume_mounts=[client.V1VolumeMount(name="cache", mount_path="/cache")],
+                        volume_mounts=[client.V1VolumeMount(name="cache", mount_path="/cache"),
+                                       client.V1VolumeMount(name="app", mount_path="/app", read_only=True)],
                     )],
-                    volumes=[client.V1Volume(name="cache", host_path=client.V1HostPathVolumeSource(path=CACHE_HOST_PATH, type="DirectoryOrCreate"))],
+                    volumes=[client.V1Volume(name="cache", host_path=client.V1HostPathVolumeSource(path=CACHE_HOST_PATH, type="DirectoryOrCreate")),
+                             client.V1Volume(name="app", config_map=client.V1ConfigMapVolumeSource(name=APP_CONFIGMAP))],
                 ),
             ),
         ),

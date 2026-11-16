@@ -2,6 +2,9 @@
 # Builds the solution, pre-pulls the container images into WSLc, and does a full
 # warm-up run (start -> health -> traffic -> stop) so the live run is fast and boring.
 # Also makes sure the NPU agent's model is downloaded and compiled for the NPU (cached in models\).
+# Use -RequireNpu to fail the pre-show check if the agent falls back to CPU.
+
+param([switch]$RequireNpu)
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -67,11 +70,21 @@ try {
     $bot = Invoke-RestMethod -Method Post http://localhost:5050/bot/generate -TimeoutSec 120
     $color = if ($bot.device -eq 'NPU') { 'Green' } else { 'Yellow' }
     Write-Host ("NPU agent wrote a take on {0} ({1}) in {2} ms: {3}" -f $bot.device, $bot.deviceName, $bot.totalMs, $bot.text) -ForegroundColor $color
-    if ($bot.device -ne 'NPU') { Write-Warning 'NPU not used - the bot is on CPU fallback. Check the NPU driver and "wslc run --gpus all".' }
+    if ($bot.device -ne 'NPU') {
+        $status = Invoke-RestMethod http://localhost:5050/bot -TimeoutSec 10
+        $reason = $status.agent.fallbackReason
+        if ([string]::IsNullOrWhiteSpace($reason)) { $reason = 'Check the NPU driver and "wslc run --gpus all".' }
+        if ($RequireNpu) { throw "NPU not used: $reason" }
+        Write-Warning "NPU not used: $reason"
+    }
 }
 finally {
     Step 'Stopping warm-up run'
     aspire stop --nologo
 }
 
-Write-Host "`nReady (incl. NPU agent on $npuModel). On stage: . .\demo-env.ps1 ; aspire run" -ForegroundColor Green
+if ($bot.device -eq 'NPU') {
+    Write-Host "`nReady (incl. NPU agent on $npuModel). On stage: . .\demo-env.ps1 ; aspire run" -ForegroundColor Green
+} else {
+    Write-Host "`nReady on CPU; the NPU needs attention. On stage: . .\demo-env.ps1 ; aspire run" -ForegroundColor Yellow
+}

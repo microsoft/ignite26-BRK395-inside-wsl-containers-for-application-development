@@ -32,45 +32,48 @@ Fill in the sections below yourself, then:
 
 # [Microsoft Ignite 2026](https://ignite.microsoft.com)
 
-## 🔥BRKXXX: SESSION TITLE
+## 🔥BRK395: Inside WSL containers for application development
 
 ### Session description
 
-Add your session description here. Keep it concise — 2-3 sentences about what attendees will learn and why it matters.
+Understand WSL containers from architecture to deployment. Learn how to build and run Linux containers on Windows while exploring Windows integration, performance, security, management, and policy controls for enterprise-scale development.
 
 ### 🚀 Getting started
 
 #### In a guided session
 
-If you're following along during a live session:
+For this breakout session:
 
-1. Step 1
-2. Step 2
-3. Open [`instructions/`](instructions/README.md) when this session includes
-   attendee step-by-step guidance
+1. Review the [official BRK395 session page](https://ignite.microsoft.com/en-US/sessions/BRK395).
+2. Slides, recording, and demo resources have not yet been supplied.
+3. Attendee step-by-step guidance has not yet been confirmed.
+   [`instructions/`](instructions/README.md) currently contains only a template placeholder.
 
 #### On your own
 
-If you're learning at your own pace:
+Post-event self-run steps have not yet been confirmed. The choice between
+[`instructions/`](instructions/README.md) and a docs-site entry point is also
+awaiting confirmation; neither currently provides session-specific guidance.
 
-1. Clone this repository
-2. Set up your environment
-3. Follow the session guidance in [`instructions/`](instructions/README.md), or
-   use the linked docs-site entry point when this repository uses that pattern
+Demo source code is available in [`src/`](src/README.md): the CPU and GPU
+Embedding Arenas, the GPU fractal and Kernel Radio containers, the Aspire HotTakes
+application, and the Moonray Windows viewer.
+The optional `data/`, `infra/`, and `docs/` folders remain placeholders.
+Their use for this session has not yet been confirmed.
 
 ### 🎯 Learning outcomes
 
-By the end of this session, you will be able to:
+Draft outcomes based on the session description; awaiting content-owner confirmation:
 
-- Outcome 1
-- Outcome 2
-- Outcome 3
+- Explain WSL container architecture and Windows integration.
+- Describe how to build and run Linux containers on Windows.
+- Identify performance, security, management, and policy considerations for enterprise-scale development.
 
 ### 💻 Technologies used
 
-- Technology 1
-- Technology 2
-- Technology 3
+- WSL
+- Windows
+- Linux containers
 
 ### 📚 Continue your learning
 
@@ -78,6 +81,9 @@ Pick your next step based on your learning style:
 
 | Resource | What you'll get |
 |----------|-----------------|
+| **[Windows Subsystem for Linux documentation](https://learn.microsoft.com/en-us/windows/wsl/)** | Microsoft Learn guidance for WSL installation, configuration, and use |
+| **[WSL on GitHub](https://github.com/microsoft/WSL)** | Official WSL source repository, downloads, release notes, and contribution links |
+| **[WSL open source developer documentation](https://wsl.dev/)** | Developer and architecture reference covering WSL architecture, security model, and development setup |
 | **[Ignite 2026 Next Steps](https://aka.ms/ignite26-next-steps)** | Additional session repos and materials from Microsoft Ignite 2026 |
 | **[Microsoft AI Skills Navigator](https://aka.ms/ignite26-asn)** | Discover AI skills, learning paths, and resources for your next step |
 | **[Microsoft Learn](https://aka.ms/ignite26-learn)** | Official documentation and guided learning paths on these topics |
@@ -101,6 +107,9 @@ copilot plugin install microsoftdocs/mcp
 For more information, visit the [Learn MCP Server repo](https://aka.ms/learnmcp).
 
 ### 👥 Content owners
+
+Content owner names and GitHub handles have not yet been confirmed.
+The owner table below remains an unfilled template.
 
 <!-- TODO: Add yourself as a content owner
 1. Change the src in the image tag to {your github url}.png

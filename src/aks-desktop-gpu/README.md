@@ -1,6 +1,6 @@
 # Embedding Arena on NVIDIA GPU
 
-This is a separate GPU version of [the CPU Arena](../aks-desktop/README.md).
+This is a separate GPU version of [the CPU Arena](../aks-dev-ctl/README.md).
 It runs the same 14-model BEIR SciFact benchmark on a local AKS Desktop cluster
 inside WSL. The original CPU code is unchanged.
 
@@ -380,6 +380,6 @@ demo publicly or use it for sensitive data.
 
 ## References
 
-- [Original CPU Arena and benchmark methodology](../aks-desktop/README.md)
+- [Original CPU Arena and benchmark methodology](../aks-dev-ctl/README.md)
 - [FastEmbed GPU setup](https://qdrant.github.io/fastembed/examples/FastEmbed_GPU/)
 - [ONNX Runtime CUDA requirements](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#requirements)
