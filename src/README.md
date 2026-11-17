@@ -2,7 +2,7 @@
 
 This folder contains the session demos:
 
-- [`aks-dev-ctl/`](aks-dev-ctl/) — CPU Embedding Arena benchmark dashboard running on a local Kubernetes cluster created by `aks-dev-ctl.exe` in WSL. See its [README](aks-dev-ctl/README.md) for setup and run instructions.
+- [`aks-desktop/`](aks-desktop/) — CPU Embedding Arena benchmark dashboard running on a local AKS Desktop cluster in WSL. See its [README](aks-desktop/README.md) for setup and run instructions.
 - [`aks-desktop-gpu/`](aks-desktop-gpu/) — NVIDIA CUDA embedding benchmark on a local AKS Desktop cluster in WSL. See its [README](aks-desktop-gpu/README.md) for image build/import, NVIDIA runtime requirements, deployment, and GPU verification.
 - [`gpu-fractal/`](gpu-fractal/) — CUDA Canvas fractal rendering in a GPU-enabled WSL container. See its [README](gpu-fractal/README.md) for build and run instructions.
 - [`kernel-radio/`](kernel-radio/) — Kernel Radio web dashboard in a WSL container, showing port mapping from the container to Windows.
