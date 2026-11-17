@@ -1,31 +1,3 @@
-## Before you're done
-
-This repo has been created for your Microsoft Ignite 2026 session. Here's how to get it ready.
-
-**Easiest path — use the agent (recommended):**
-
-- Open GitHub Copilot Chat and say `help me initialize repo`. The agent will walk you through getting the README populated.
-- When you're ready to publish, say `help me finalize repo`. The agent will clean up unused folders, validate everything, and remove this "Before you're done" section and other extra stuff that attendees don't need to see.
-- Curious how it works? Read the [agent workflow](.github/AGENT-WORKFLOW.md).
-
-**Doing it manually?**
-
-Fill in the sections below yourself, then:
-
-- Delete any placeholder folders you don't need (`data/`, `infra/`, etc.)
-- Delete this "Before you're done" section
-- Delete `.github/agents/`, `.github/tests/`, `.github/copilot-instructions.md`, and `.github/AGENT-WORKFLOW.md` — these are template tooling, not part of your published repo
-
-**Folder conventions:**
-
-- Attendee step-by-step guidance goes in `instructions/`. If you use MkDocs or a docs site instead, put it in `docs/` and link to it from this README.
-- Reference material and background reading go in `docs/`.
-- You can add a `.devcontainer/` folder if needed.
-
----
-
-<a name="start-building"></a>
-
 <p align="center">
 <img src="img/banner-ignite-26.png" alt="Microsoft Ignite 2026" width="100%"/>
 </p>
@@ -40,40 +12,48 @@ Understand WSL containers from architecture to deployment. Learn how to build an
 
 ### 🚀 Getting started
 
-#### In a guided session
+This repo contains the demos shown in the session. Each one runs Linux containers
+on Windows with WSL containers (`wslc`), with no separate container engine
+required.
 
-For this breakout session:
+1. Watch the session or review the [BRK395 session page](https://ignite.microsoft.com/en-US/sessions/BRK395).
+2. Clone this repo:
 
-1. Review the [official BRK395 session page](https://ignite.microsoft.com/en-US/sessions/BRK395).
-2. Slides, recording, and demo resources have not yet been supplied.
-3. Attendee step-by-step guidance has not yet been confirmed.
-   [`instructions/`](instructions/README.md) currently contains only a template placeholder.
+   ```powershell
+   git clone https://github.com/microsoft/ignite26-BRK395-inside-wsl-containers-for-application-development.git
+   ```
 
-#### On your own
+3. Make sure WSL is up to date (`wsl --update`) and that `wslc` is available.
+4. Pick a demo below and follow its README for prerequisites and run steps.
 
-Post-event self-run steps have not yet been confirmed. The choice between
-[`instructions/`](instructions/README.md) and a docs-site entry point is also
-awaiting confirmation; neither currently provides session-specific guidance.
+### 🧪 Demos
 
-Demo source code is available in [`src/`](src/README.md): the CPU and GPU
-Embedding Arenas, the GPU fractal and Kernel Radio containers, the Aspire HotTakes
-application, and the Moonray Windows viewer.
-The optional `data/`, `infra/`, and `docs/` folders remain placeholders.
-Their use for this session has not yet been confirmed.
+| Demo | What it shows | Hardware |
+|------|---------------|----------|
+| [Kernel Radio](src/kernel-radio/README.md) | A small web dashboard in a WSL container, reachable from Windows through port mapping | Any |
+| [Hot Takes](src/aspire-hot-takes/HotTakes/README.md) | An Aspire app whose PostgreSQL, Redis, and AI agent containers run on WSL containers | Intel NPU optional (CPU fallback) |
+| [CUDA Canvas](src/gpu-fractal/README.md) | A CUDA kernel in a Linux container rendering fractals for a Windows browser | NVIDIA GPU |
+| [Moonray viewer](src/moonray_gui/README.md) | A Windows WPF app driving the Linux OpenMoonRay renderer inside a WSL container | Any |
+| [Embedding Arena](src/aks-desktop/README.md) | A 14-model embedding benchmark on a local AKS Desktop Kubernetes cluster in WSL | Any |
+| [Embedding Arena on GPU](src/aks-desktop-gpu/README.md) | The same benchmark with embeddings on CUDA | NVIDIA GPU |
+
+See [`src/README.md`](src/README.md) for a summary of each folder.
 
 ### 🎯 Learning outcomes
 
-Draft outcomes based on the session description; awaiting content-owner confirmation:
-
-- Explain WSL container architecture and Windows integration.
-- Describe how to build and run Linux containers on Windows.
-- Identify performance, security, management, and policy considerations for enterprise-scale development.
+- Explain how WSL containers work and how they integrate with Windows, including networking, GPU, and NPU access.
+- Build and run Linux containers on Windows with `wslc`, from single containers to Aspire apps and local Kubernetes clusters.
+- Identify the performance, security, management, and policy controls that matter for enterprise-scale development.
 
 ### 💻 Technologies used
 
-- WSL
-- Windows
-- Linux containers
+- Windows Subsystem for Linux (WSL) and WSL containers (`wslc`)
+- Aspire and .NET
+- AKS Desktop and Kubernetes
+- PostgreSQL with pgvector, and Redis
+- Python, FastAPI, FastEmbed, and ONNX Runtime
+- NVIDIA CUDA and Intel NPU with OpenVINO
+- OpenMoonRay and WPF
 
 ### 📚 Continue your learning
 
@@ -91,8 +71,6 @@ Pick your next step based on your learning style:
 
 ### 🌟 Microsoft Learn MCP Server
 
-<!-- Remove this section if the Microsoft Learn MCP Server is not relevant to the session. -->
-
 The Microsoft Learn MCP Server gives your AI agent direct access to Microsoft's official documentation — grounded, up-to-date answers about the topics in this session.
 
 **GitHub Copilot CLI** — Install with:
@@ -108,20 +86,17 @@ For more information, visit the [Learn MCP Server repo](https://aka.ms/learnmcp)
 
 ### 👥 Content owners
 
-Content owner names and GitHub handles have not yet been confirmed.
-The owner table below remains an unfilled template.
-
-<!-- TODO: Add yourself as a content owner
-1. Change the src in the image tag to {your github url}.png
-2. Change INSERT NAME HERE to your name
-3. Change the github url in the final href to your url. -->
-
 <table>
 <tr>
-    <td align="center"><a href="http://github.com/yourGitHubHandle">
-        <img src="https://github.com/yourGitHubHandle.png" width="100px;" alt="INSERT NAME HERE"/><br />
-        <sub><b>INSERT NAME HERE</b></sub></a><br />
-            <a href="https://github.com/yourGitHubHandle" title="talk">📢</a>
+    <td align="center"><a href="https://github.com/craigloewen-msft">
+        <img src="https://github.com/craigloewen-msft.png" width="100px;" alt="Craig Loewen"/><br />
+        <sub><b>Craig Loewen</b></sub></a><br />
+            <a href="https://github.com/craigloewen-msft" title="talk">📢</a>
+    </td>
+    <td align="center"><a href="https://github.com/ptrivedi">
+        <img src="https://github.com/ptrivedi.png" width="100px;" alt="Pooja Trivedi"/><br />
+        <sub><b>Pooja Trivedi</b></sub></a><br />
+            <a href="https://github.com/ptrivedi" title="talk">📢</a>
     </td>
 </tr></table>
 
